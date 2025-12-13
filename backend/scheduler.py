@@ -25,7 +25,7 @@ class BatchCrawler:
         )
         self.wiki_zh = wikipediaapi.Wikipedia(
             user_agent='TermCorpusGenerator/1.0 (contact@example.com)',
-            language='zh'
+            language='zh'  # Chinese Wikipedia (content is usually in Simplified Chinese)
         )
     
     async def crawl_single_term(self, term: str) -> Dict:

@@ -273,11 +273,23 @@ async def export_results(task_id: int, format: str = "json"):
         raise HTTPException(status_code=404, detail="No completed terms found")
     
     if format == "json":
-        return JSONResponse(content=terms)
+        # Create JSON file for download
+        json_content = json.dumps(terms, ensure_ascii=False, indent=2)
+        return StreamingResponse(
+            iter([json_content]),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=task_{task_id}_results.json"}
+        )
     
     elif format == "csv":
-        output = io.StringIO()
-        writer = csv.writer(output)
+        # Use UTF-8 BOM for proper Chinese display in Excel
+        output = io.BytesIO()
+        # Write UTF-8 BOM
+        output.write(b'\xef\xbb\xbf')
+        
+        # Create CSV content
+        csv_content = io.StringIO()
+        writer = csv.writer(csv_content)
         
         # Write header
         writer.writerow(['Term', 'English Summary', 'English URL', 'Chinese Summary', 'Chinese URL'])
@@ -292,10 +304,13 @@ async def export_results(task_id: int, format: str = "json"):
                 term['zh_url'] or ''
             ])
         
+        # Encode to UTF-8 and write to output
+        output.write(csv_content.getvalue().encode('utf-8'))
         output.seek(0)
+        
         return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
+            output,
+            media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": f"attachment; filename=task_{task_id}_results.csv"}
         )
     
