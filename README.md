@@ -97,3 +97,143 @@ Searches for a term and returns bilingual data.
   "zh_url": "https://zh.wikipedia.org/wiki/%E9%80%9A%E8%B4%A7%E8%86%A8%E8%83%80"
 }
 ```
+
+## 🗺️ Advanced Automation Roadmap
+
+This project is being enhanced with advanced automation capabilities to transform it from a single-term search tool into a comprehensive, self-growing knowledge corpus system.
+
+### 🎯 Planned Features
+
+#### **Phase 1: Batch Import & Automated Crawling** ⭐ Priority
+- **Batch Input Methods**: 
+  - Paste multiple terms (one per line)
+  - Upload CSV/TXT/Excel files with term lists
+  - Categorized imports with custom tags
+- **Automation Controls**:
+  - Concurrent crawling with rate limiting (avoid Wikipedia blocking)
+  - Real-time progress monitoring (completed/failed/total)
+  - Automatic retry mechanism for failed requests
+  - Configurable crawl intervals (e.g., 2-5 seconds between requests)
+- **Results Management**:
+  - Batch export to JSON/CSV
+  - Category-based Markdown file generation
+  - Failed terms tracking for manual review
+  - Crawl history and statistics
+
+#### **Phase 2: Intelligent Association Crawling**
+- **Link Discovery Strategies**:
+  - "See also" sections from Wikipedia pages
+  - High-frequency internal links
+  - Category tags exploration
+  - Cross-language related articles
+- **Crawl Depth Control**:
+  - Configurable depth levels (1-3 layers)
+  - Maximum terms per layer
+  - Blacklist filtering for irrelevant terms
+- **Knowledge Graph Visualization**:
+  - Force-directed graph of term relationships
+  - Topic clustering display
+
+#### **Phase 3: Scheduled & Incremental Updates**
+- **Scheduling Options**:
+  - Daily/Weekly/Monthly automatic updates
+  - Priority-based update queue
+  - Monitor Wikipedia revision history API for changes
+- **Version Control**:
+  - Historical version tracking
+  - Diff comparison between versions
+  - Change notifications (email/webhook)
+
+#### **Phase 4: Multi-Source Data Aggregation**
+- **Extended Data Sources**:
+  - Wikidata (structured knowledge base)
+  - Baidu Baike (Chinese encyclopedia)
+  - Britannica Encyclopedia
+  - Academic paper abstracts (Google Scholar/arXiv)
+  - Real-time financial data for economic terms
+- **Data Fusion**:
+  - Intelligent deduplication and merging
+  - Source attribution and credibility scoring
+  - Cross-source validation
+
+#### **Phase 5: AI-Enhanced Corpus Generation**
+- **AI Augmentation**:
+  - Automatic summary optimization
+  - Term definition standardization
+  - Named entity recognition and tagging
+  - Semantic relationship generation between terms
+  - Multi-language translation quality checking
+- **Intelligent Recommendations**:
+  - Suggest missing terms based on existing corpus
+  - Identify coverage gaps in the knowledge base
+
+#### **Phase 6: Distributed Crawling Architecture** (For Large-Scale)
+- **Distributed Components**:
+  - Task queue: RabbitMQ + Celery
+  - Distributed storage: MongoDB/PostgreSQL
+  - Cache layer: Redis
+  - Load balancing across worker nodes
+- **Monitoring Dashboard**:
+  - Real-time crawl status monitoring
+  - Resource usage metrics
+  - Error log aggregation
+
+### 🏗️ Technical Architecture (Phase 1 Preview)
+
+**Backend Enhancements**:
+```
+backend/
+├── main.py              # Existing FastAPI main file
+├── worker.py            # New: Background task worker (Celery/RQ)
+├── models.py            # New: Database models
+├── scheduler.py         # New: Batch crawl scheduler
+├── database.py          # New: Database connection
+└── utils/
+    ├── rate_limiter.py  # Rate limiting control
+    └── retry.py         # Retry logic
+```
+
+**Frontend Enhancements**:
+```
+frontend/src/
+├── App.vue                    # Existing main component
+└── components/
+    ├── BatchImport.vue        # Batch import interface
+    ├── ProgressMonitor.vue    # Progress tracking
+    └── ResultsTable.vue       # Results data table
+```
+
+**Database Schema** (SQLite for Phase 1):
+```sql
+-- Batch tasks tracking
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY,
+    status TEXT,
+    created_at TIMESTAMP,
+    total_terms INTEGER,
+    completed INTEGER
+);
+
+-- Individual terms
+CREATE TABLE terms (
+    id INTEGER PRIMARY KEY,
+    task_id INTEGER,
+    term TEXT,
+    status TEXT,
+    en_summary TEXT,
+    zh_summary TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
+
+### 📈 Implementation Priority
+
+1. **Immediate** (Phase 1): Batch crawling - 10x efficiency boost with minimal complexity
+2. **Short-term** (Phases 2-3): Intelligent crawling and scheduling - transform into self-growing knowledge base
+3. **Mid-term** (Phases 4-5): Multi-source and AI enhancement - professional-grade corpus quality
+4. **Long-term** (Phase 6): Distributed architecture - only when corpus exceeds 10,000+ terms
+
+---
+
+*This roadmap reflects the evolution from a simple search tool to an enterprise-grade knowledge corpus management system.*

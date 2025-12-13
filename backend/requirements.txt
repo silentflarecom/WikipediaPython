@@ -2,3 +2,5 @@ fastapi
 uvicorn
 wikipedia-api
 pydantic
+aiosqlite
+python-multipart

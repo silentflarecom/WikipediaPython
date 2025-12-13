@@ -1,12 +1,25 @@
 <script setup>
 import { ref } from 'vue'
 import axios from 'axios'
+import BatchImport from './components/BatchImport.vue'
+import ProgressMonitor from './components/ProgressMonitor.vue'
+import ResultsTable from './components/ResultsTable.vue'
 
+// Active view: 'single' or 'batch'
+const activeView = ref('single')
+
+// Single search state
 const term = ref('')
 const loading = ref(false)
 const error = ref(null)
 const result = ref(null)
 
+// Batch processing state
+const currentTaskId = ref(null)
+const showProgress = ref(false)
+const showResults = ref(false)
+
+// Single search functions
 const search = async () => {
   if (!term.value.trim()) return
   
@@ -44,111 +57,230 @@ const downloadJson = () => {
 const handleKeyup = (e) => {
   if (e.key === 'Enter') search()
 }
+
+// Batch processing functions
+const handleTaskCreated = async (taskData) => {
+  currentTaskId.value = taskData.task_id
+  
+  // Start the task
+  try {
+    await axios.post(`http://localhost:8000/api/batch/${taskData.task_id}/start`)
+    showProgress.value = true
+  } catch (err) {
+    console.error('Error starting task:', err)
+  }
+}
+
+const handleTaskCompleted = (taskId) => {
+  console.log('Task completed:', taskId)
+}
+
+const handleRetry = async (taskId) => {
+  try {
+    await axios.post(`http://localhost:8000/api/batch/${taskId}/retry-failed`)
+    showResults.value = false
+    showProgress.value = true
+  } catch (err) {
+    console.error('Error retrying:', err)
+  }
+}
+
+const viewResults = () => {
+  showProgress.value = false
+  showResults.value = true
+}
+
+const closeProgress = () => {
+  showProgress.value = false
+}
+
+const closeResults = () => {
+  showResults.value = false
+}
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-    <div class="w-full max-w-4xl space-y-8">
+  <div class="min-h-screen flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div class="w-full max-w-6xl space-y-8">
       
       <!-- Header -->
       <div class="text-center">
-        <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight">
+        <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 tracking-tight">
           Term Corpus Generator
         </h1>
-        <p class="mt-2 text-lg text-gray-600">
-          Instantly fetch bilingual economic definitions.
+        <p class="mt-3 text-lg text-gray-600">
+          Instantly fetch bilingual definitions from Wikipedia
         </p>
       </div>
 
-      <!-- Search Box -->
-      <div class="mt-8 flex gap-2">
-        <div class="relative flex-grow">
-          <input 
-            v-model="term" 
-            @keyup="handleKeyup"
-            type="text" 
-            class="block w-full rounded-lg border-gray-300 shadow-sm focus:ring-primary focus:border-primary sm:text-lg pl-4 py-3 border outline-none transition-all duration-200" 
-            placeholder="Enter a term (e.g., Inflation)" 
-          />
-        </div>
-        <button 
-          @click="search" 
-          :disabled="loading"
-          class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      <!-- View Switcher -->
+      <div class="flex justify-center gap-3">
+        <button
+          @click="activeView = 'single'"
+          :class="[
+            'px-8 py-3 rounded-xl font-semibold text-lg transition-all shadow-md',
+            activeView === 'single'
+              ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-blue-200'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          ]"
         >
-          <span v-if="loading" class="animate-spin mr-2">⟳</span>
-          Search
+          🔍 Single Search
+        </button>
+        <button
+          @click="activeView = 'batch'"
+          :class="[
+            'px-8 py-3 rounded-xl font-semibold text-lg transition-all shadow-md',
+            activeView === 'batch'
+              ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-purple-200'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          ]"
+        >
+          📚 Batch Import
         </button>
       </div>
 
-      <!-- Error Message -->
-      <div v-if="error" class="rounded-md bg-red-50 p-4 border border-red-200 animate-fade-in-down">
-        <div class="flex">
-          <div class="ml-3">
-            <h3 class="text-sm font-medium text-red-800">Error</h3>
-            <div class="mt-2 text-sm text-red-700">
-              <p>{{ error }}</p>
+      <!-- Single Search View -->
+      <div v-if="activeView === 'single'" class="space-y-8">
+        <!-- Search Box -->
+        <div class="mt-8 flex gap-2">
+          <div class="relative flex-grow">
+            <input 
+              v-model="term" 
+              @keyup="handleKeyup"
+              type="text" 
+              class="block w-full rounded-xl border-gray-300 shadow-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-lg pl-4 py-4 border outline-none transition-all duration-200" 
+              placeholder="Enter a term (e.g., Inflation)" 
+            />
+          </div>
+          <button 
+            @click="search" 
+            :disabled="loading"
+            class="inline-flex items-center px-8 py-4 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            <span v-if="loading" class="animate-spin mr-2">⟳</span>
+            Search
+          </button>
+        </div>
+
+        <!-- Error Message -->
+        <div v-if="error" class="rounded-xl bg-red-50 p-4 border border-red-200 animate-fade-in-down shadow-md">
+          <div class="flex">
+            <div class="ml-3">
+              <h3 class="text-sm font-medium text-red-800">Error</h3>
+              <div class="mt-2 text-sm text-red-700">
+                <p>{{ error }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Area -->
+        <transition 
+          enter-active-class="transition ease-out duration-300"
+          enter-from-class="transform opacity-0 translate-y-4" 
+          enter-to-class="transform opacity-100 translate-y-0"
+          leave-active-class="transition ease-in duration-200"
+          leave-from-class="transform opacity-100 translate-y-0"
+          leave-to-class="transform opacity-0 translate-y-4"
+        >
+          <div v-if="result" class="bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+            <div class="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-100">
+              <h3 class="text-lg leading-6 font-medium text-gray-900">
+                Results for: <span class="font-bold text-blue-600">{{ result.term }}</span>
+              </h3>
+              <button 
+                @click="downloadJson" 
+                class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition"
+              >
+                Export JSON
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+              <!-- English Section -->
+              <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                  <h4 class="text-lg font-bold text-gray-800 flex items-center">
+                    🇺🇸 English
+                  </h4>
+                  <a :href="result.en_url" target="_blank" class="text-sm text-blue-500 hover:text-blue-700 font-medium transition">Wikipedia →</a>
+                </div>
+                <p class="text-gray-600 leading-relaxed text-sm h-80 overflow-y-auto pr-2 custom-scrollbar">
+                  {{ result.en_summary }}
+                </p>
+              </div>
+
+              <!-- Chinese Section -->
+              <div class="p-6 bg-slate-50/50">
+                <div class="flex items-center justify-between mb-4">
+                  <h4 class="text-lg font-bold text-gray-800 flex items-center">
+                    🇨🇳 Chinese
+                  </h4>
+                  <a v-if="result.zh_url" :href="result.zh_url" target="_blank" class="text-sm text-blue-500 hover:text-blue-700 font-medium transition">Wikipedia →</a>
+                </div>
+                <div v-if="result.zh_url">
+                  <p class="text-gray-600 leading-relaxed text-sm h-80 overflow-y-auto pr-2 custom-scrollbar">
+                    {{ result.zh_summary }}
+                  </p>
+                </div>
+                <div v-else class="flex flex-col items-center justify-center h-80 text-gray-400">
+                  <span>No Chinese translation found.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
+      </div>
+
+      <!-- Batch Import View -->
+      <div v-if="activeView === 'batch'" class="space-y-6">
+        <!-- Progress Monitor (if task is running) -->
+        <div v-if="showProgress && currentTaskId">
+          <ProgressMonitor 
+            :taskId="currentTaskId" 
+            @task-completed="viewResults"
+            @close="closeProgress"
+          />
+        </div>
+
+        <!-- Results Table (if viewing results) -->
+        <div v-if="showResults && currentTaskId">
+          <ResultsTable 
+            :taskId="currentTaskId" 
+            @close="closeResults"
+            @retry="handleRetry"
+          />
+        </div>
+
+        <!-- Batch Import Component (always visible when not showing progress/results) -->
+        <div v-if="!showProgress && !showResults">
+          <BatchImport @task-created="handleTaskCreated" />
+        </div>
+
+        <!-- Quick Access to Results (if task exists) -->
+        <div v-if="currentTaskId && !showProgress && !showResults" class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-sm font-medium text-blue-900">Recent Task #{{ currentTaskId }}</p>
+              <p class="text-xs text-blue-600 mt-1">Click to view progress or results</p>
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="showProgress = true"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+              >
+                View Progress
+              </button>
+              <button
+                @click="showResults = true"
+                class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition"
+              >
+                View Results
+              </button>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Results Area -->
-      <transition 
-        enter-active-class="transition ease-out duration-300"
-        enter-from-class="transform opacity-0 translate-y-4" 
-        enter-to-class="transform opacity-100 translate-y-0"
-        leave-active-class="transition ease-in duration-200"
-        leave-from-class="transform opacity-100 translate-y-0"
-        leave-to-class="transform opacity-0 translate-y-4"
-      >
-        <div v-if="result" class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100">
-          <div class="px-6 py-4 flex justify-between items-center bg-gray-50 border-b border-gray-100">
-            <h3 class="text-lg leading-6 font-medium text-gray-900">
-              Results for: <span class="font-bold text-blue-600">{{ result.term }}</span>
-            </h3>
-            <button 
-              @click="downloadJson" 
-              class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition"
-            >
-              Export JSON
-            </button>
-          </div>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-            <!-- English Section -->
-            <div class="p-6">
-              <div class="flex items-center justify-between mb-4">
-                <h4 class="text-lg font-bold text-gray-800 flex items-center">
-                  🇺🇸 English
-                </h4>
-                <a :href="result.en_url" target="_blank" class="text-sm text-blue-500 hover:text-blue-700 font-medium transition">Wikipedia →</a>
-              </div>
-              <p class="text-gray-600 leading-relaxed text-sm h-80 overflow-y-auto pr-2 custom-scrollbar">
-                {{ result.en_summary }}
-              </p>
-            </div>
-
-            <!-- Chinese Section -->
-            <div class="p-6 bg-slate-50/50">
-              <div class="flex items-center justify-between mb-4">
-                <h4 class="text-lg font-bold text-gray-800 flex items-center">
-                  🇨🇳 Chinese
-                </h4>
-                <a v-if="result.zh_url" :href="result.zh_url" target="_blank" class="text-sm text-blue-500 hover:text-blue-700 font-medium transition">Wikipedia →</a>
-              </div>
-              <div v-if="result.zh_url">
-                <p class="text-gray-600 leading-relaxed text-sm h-80 overflow-y-auto pr-2 custom-scrollbar">
-                  {{ result.zh_summary }}
-                </p>
-              </div>
-              <div v-else class="flex flex-col items-center justify-center h-80 text-gray-400">
-                <span>No Chinese translation found.</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
     </div>
   </div>
 </template>
