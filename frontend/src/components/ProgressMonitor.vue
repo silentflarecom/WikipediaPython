@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
+import VisualGraph from './VisualGraph.vue'
 
 const props = defineProps({
   taskId: {
@@ -11,6 +12,7 @@ const props = defineProps({
 
 const emit = defineEmits(['task-completed', 'close'])
 
+const activeTab = ref('status')
 const status = ref(null)
 const currentTerm = ref('')
 const polling = ref(null)
@@ -93,7 +95,25 @@ onUnmounted(() => {
       </button>
     </div>
     
-    <div class="p-6">
+    <div class="p-6 pt-2">
+      <!-- Tabs -->
+      <div v-if="status" class="flex gap-6 border-b border-gray-200 mb-6">
+        <button
+          @click="activeTab = 'status'"
+          class="py-3 text-sm font-medium border-b-2 transition-colors"
+          :class="activeTab === 'status' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+        >
+          Task Status
+        </button>
+        <button
+          @click="activeTab = 'graph'"
+          class="py-3 text-sm font-medium border-b-2 transition-colors"
+          :class="activeTab === 'graph' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+        >
+          Knowledge Graph 🕸️
+        </button>
+      </div>
+
       <div v-if="loading">
         <div class="text-center py-8">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -102,7 +122,9 @@ onUnmounted(() => {
       </div>
       
       <div v-else-if="status">
-        <!-- Progress Bar -->
+        <!-- Status Tab -->
+        <div v-if="activeTab === 'status'">
+          <!-- Progress Bar -->
         <div class="mb-6">
           <div class="flex justify-between items-center mb-2">
             <span class="text-sm font-medium text-gray-700">Progress</span>
@@ -219,6 +241,12 @@ onUnmounted(() => {
               <p>{{ new Date(status.updated_at).toLocaleString() }}</p>
             </div>
           </div>
+        </div>
+        </div>
+        
+        <!-- Graph Tab -->
+        <div v-if="activeTab === 'graph'">
+          <VisualGraph :task-id="taskId" />
         </div>
       </div>
     </div>

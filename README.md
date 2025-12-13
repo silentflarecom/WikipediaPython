@@ -61,19 +61,19 @@ This tool is designed to strictly adhere to [Wikipedia's User-Agent Policy](http
   - Batch export to JSON/CSV (Simplified Chinese support) ✅
   - Database persistence ✅
 
-#### **Phase 2: Intelligent Association Crawling**
+#### **Phase 2: Intelligent Association Crawling** ✅ COMPLETED
 - **Link Discovery Strategies**:
-  - "See also" sections from Wikipedia pages
-  - High-frequency internal links
-  - Category tags exploration
-  - Cross-language related articles
+  - "See also" sections from Wikipedia pages ✅
+  - High-frequency internal links (via Associations) ✅
+  - Category tags exploration ✅
+  - Cross-language related articles (via langlinks) ✅
 - **Crawl Depth Control**:
-  - Configurable depth levels (1-3 layers)
-  - Maximum terms per layer
-  - Blacklist filtering for irrelevant terms
+  - Configurable depth levels (1-3 layers) ✅
+  - Maximum terms per layer ✅
+  - Blacklist filtering for irrelevant terms (Basic filtering implemented) ✅
 - **Knowledge Graph Visualization**:
-  - Force-directed graph of term relationships
-  - Topic clustering display
+  - Force-directed graph of term relationships ✅
+  - Topic clustering display (via Force Layout) ✅
 
 #### **Phase 3: Scheduled & Incremental Updates**
 - **Scheduling Options**:

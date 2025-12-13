@@ -9,6 +9,7 @@ const textInput = ref('')
 const uploadedFile = ref(null)
 const terms = ref([])
 const crawlInterval = ref(3)
+const maxDepth = ref(1)
 const loading = ref(false)
 const error = ref(null)
 
@@ -73,7 +74,8 @@ const createBatchTask = async () => {
   try {
     const response = await axios.post('http://localhost:8000/api/batch/create', {
       terms: terms.value,
-      crawl_interval: crawlInterval.value
+      crawl_interval: crawlInterval.value,
+      max_depth: maxDepth.value
     })
     
     emit('task-created', response.data)
@@ -220,6 +222,26 @@ const createBatchTask = async () => {
         />
         <p class="text-xs text-gray-500 mt-1">
           Wait time between each Wikipedia request (prevents blocking)
+        </p>
+      </div>
+      
+      <div v-if="terms.length > 0" class="mt-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          Max Crawl Depth
+        </label>
+        <div class="flex items-center gap-4">
+          <input
+            v-model.number="maxDepth"
+            type="range"
+            min="1"
+            max="3"
+            step="1"
+            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+          />
+          <span class="text-sm font-medium text-gray-700 w-8">{{ maxDepth }}</span>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">
+          1 = Only input terms. 2 = Also crawl "See Also" links of input terms. 3 = Two layers deep.
         </p>
       </div>
       

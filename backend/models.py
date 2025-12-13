@@ -12,6 +12,8 @@ class TermResponse(BaseModel):
 class BatchTaskCreate(BaseModel):
     terms: List[str]
     crawl_interval: int = 3
+    max_depth: int = 1
+    max_terms_per_layer: int = 10
 
 class BatchTaskResponse(BaseModel):
     task_id: int
@@ -25,8 +27,14 @@ class TaskStatus(BaseModel):
     completed_terms: int
     failed_terms: int
     progress_percent: float
+    max_depth: int = 1
     created_at: str
     updated_at: str
+
+class Association(BaseModel):
+    target_term: str
+    association_type: str
+    weight: float
 
 class TermDetail(BaseModel):
     id: int
@@ -38,6 +46,8 @@ class TermDetail(BaseModel):
     zh_summary: Optional[str] = None
     zh_url: Optional[str] = None
     error_message: Optional[str] = None
+    depth_level: int = 0
+    source_term_id: Optional[int] = None
     created_at: str
     updated_at: str
 

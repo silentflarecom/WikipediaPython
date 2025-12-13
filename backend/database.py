@@ -39,6 +39,25 @@ async def init_database():
             )
         """)
         
+        # Create term_associations table
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS term_associations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_term_id INTEGER,
+                target_term TEXT,
+                association_type TEXT,
+                weight REAL DEFAULT 1.0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (source_term_id) REFERENCES terms(id)
+            )
+        """)
+
+        # Add columns to existing tables if they don't exist
+        # We use a helper to add columns safely
+        await add_column_if_not_exists(db, "batch_tasks", "max_depth", "INTEGER DEFAULT 1")
+        await add_column_if_not_exists(db, "terms", "depth_level", "INTEGER DEFAULT 0")
+        await add_column_if_not_exists(db, "terms", "source_term_id", "INTEGER")
+        
         # Create indexes
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_task_id ON terms(task_id)
@@ -48,25 +67,45 @@ async def init_database():
             CREATE INDEX IF NOT EXISTS idx_status ON terms(status)
         """)
         
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_source_term ON term_associations(source_term_id)
+        """)
+        
         await db.commit()
 
-async def create_batch_task(total_terms: int, crawl_interval: int = 3) -> int:
+async def add_column_if_not_exists(db, table, column, definition):
+    """Helper to add a column if it doesn't already exist"""
+    try:
+        await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        print(f"Added column {column} to {table}")
+    except Exception as e:
+        # Ignore error if column already exists
+        pass
+
+async def create_batch_task(total_terms: int, crawl_interval: int = 3, max_depth: int = 1) -> int:
     """Create a new batch task and return its ID"""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         cursor = await db.execute("""
-            INSERT INTO batch_tasks (status, total_terms, crawl_interval)
-            VALUES (?, ?, ?)
-        """, ("pending", total_terms, crawl_interval))
+            INSERT INTO batch_tasks (status, total_terms, crawl_interval, max_depth)
+            VALUES (?, ?, ?, ?)
+        """, ("pending", total_terms, crawl_interval, max_depth))
         await db.commit()
         return cursor.lastrowid
 
-async def add_terms_to_task(task_id: int, terms: list):
+async def add_terms_to_task(task_id: int, terms: list, depth_level: int = 0, source_term_id: int = None):
     """Add terms to a batch task"""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.executemany("""
-            INSERT INTO terms (task_id, term, status)
-            VALUES (?, ?, ?)
-        """, [(task_id, term, "pending") for term in terms])
+            INSERT INTO terms (task_id, term, status, depth_level, source_term_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, [(task_id, term, "pending", depth_level, source_term_id) for term in terms])
+        # Update total terms count in batch_tasks
+        if depth_level > 0:
+            await db.execute("""
+                UPDATE batch_tasks 
+                SET total_terms = total_terms + ? 
+                WHERE id = ?
+            """, (len(terms), task_id))
         await db.commit()
 
 async def update_task_status(task_id: int, status: str):
@@ -163,3 +202,24 @@ async def get_pending_terms(task_id: int) -> list:
 async def get_failed_terms(task_id: int) -> list:
     """Get all failed terms for a task"""
     return await get_task_terms(task_id, "failed")
+
+async def save_term_associations(source_term_id: int, associations: list):
+    """Save associations for a term
+    associations: list of dicts with keys 'target_term', 'association_type', 'weight'
+    """
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        await db.executemany("""
+            INSERT INTO term_associations (source_term_id, target_term, association_type, weight)
+            VALUES (?, ?, ?, ?)
+        """, [(source_term_id, a['target_term'], a['association_type'], a.get('weight', 1.0)) for a in associations])
+        await db.commit()
+
+async def get_term_associations(term_id: int) -> list:
+    """Get all associations for a term"""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM term_associations WHERE source_term_id = ?
+        """, (term_id,))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]

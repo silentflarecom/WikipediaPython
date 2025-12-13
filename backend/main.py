@@ -18,9 +18,10 @@ from models import (
 from database import (
     init_database, create_batch_task, add_terms_to_task,
     get_task_status, get_task_terms, get_all_tasks,
-    update_task_counters
+    update_task_counters, get_term_associations
 )
 from scheduler import start_batch_crawl, cancel_batch_crawl, retry_failed_terms
+from models import Association
 
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
@@ -125,7 +126,7 @@ async def create_batch(batch_data: BatchTaskCreate):
         raise HTTPException(status_code=400, detail="No valid terms provided")
     
     # Create task
-    task_id = await create_batch_task(len(unique_terms), batch_data.crawl_interval)
+    task_id = await create_batch_task(len(unique_terms), batch_data.crawl_interval, batch_data.max_depth)
     
     # Add terms to task
     await add_terms_to_task(task_id, unique_terms)
@@ -133,12 +134,12 @@ async def create_batch(batch_data: BatchTaskCreate):
     return BatchTaskResponse(
         task_id=task_id,
         total_terms=len(unique_terms),
-        message=f"Batch task created with {len(unique_terms)} terms"
+        message=f"Batch task created with {len(unique_terms)} terms (Depth: {batch_data.max_depth})"
     )
 
 
 @app.post("/api/batch/upload", response_model=BatchTaskResponse)
-async def upload_batch_file(file: UploadFile = File(...), crawl_interval: int = 3):
+async def upload_batch_file(file: UploadFile = File(...), crawl_interval: int = 3, max_depth: int = 1):
     """Upload a file (TXT or CSV) containing terms"""
     if not file.filename.endswith(('.txt', '.csv')):
         raise HTTPException(status_code=400, detail="Only .txt and .csv files are supported")
@@ -165,13 +166,13 @@ async def upload_batch_file(file: UploadFile = File(...), crawl_interval: int = 
         unique_terms = list(dict.fromkeys(terms))
         
         # Create task
-        task_id = await create_batch_task(len(unique_terms), crawl_interval)
+        task_id = await create_batch_task(len(unique_terms), crawl_interval, max_depth)
         await add_terms_to_task(task_id, unique_terms)
         
         return BatchTaskResponse(
             task_id=task_id,
             total_terms=len(unique_terms),
-            message=f"File uploaded successfully with {len(unique_terms)} terms"
+            message=f"File uploaded successfully with {len(unique_terms)} terms (Depth: {max_depth})"
         )
     
     except Exception as e:
@@ -320,6 +321,46 @@ async def export_results(task_id: int, format: str = "json"):
     else:
         raise HTTPException(status_code=400, detail="Format must be 'json' or 'csv'")
 
+
+
+
+
+@app.get("/api/batch/{task_id}/graph")
+async def get_task_graph(task_id: int):
+    """Get the knowledge graph (nodes and edges) for a task"""
+    terms = await get_task_terms(task_id)
+    
+    nodes = []
+    edges = []
+    
+    term_map = {t['term'].lower(): t['id'] for t in terms}
+    
+    for term in terms:
+        nodes.append({
+            "id": term['id'],
+            "label": term['term'],
+            "status": term['status'],
+            "depth": term['depth_level'],
+            "group": term['depth_level'] # Use depth for coloring
+        })
+        
+        # Get associations
+        assocs = await get_term_associations(term['id'])
+        for assoc in assocs:
+            target_lower = assoc['target_term'].lower()
+            if target_lower in term_map:
+                edges.append({
+                    "from": term['id'],
+                    "to": term_map[target_lower],
+                    "type": assoc['association_type'],
+                    "value": assoc['weight']
+                })
+            # Else: we could add external nodes if we want to visualize uncrawled associations
+    
+    return {
+        "nodes": nodes,
+        "edges": edges
+    }
 
 if __name__ == "__main__":
     import uvicorn
