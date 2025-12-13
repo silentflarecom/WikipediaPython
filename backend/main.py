@@ -43,9 +43,12 @@ app.add_middleware(
 )
 
 # Initialize Wikipedia API
-# User-Agent is required by Wikipedia API
+# User-Agent is explicitly set to comply with Wikimedia User-Agent Policy
+# https://meta.wikimedia.org/wiki/User-Agent_policy
+USER_AGENT = 'WikipediaTermCorpusGenerator/1.0 (Student Project; contact@silentflare.com; https://github.com/silentflarecom/WikipediaPython)'
+
 wiki_en = wikipediaapi.Wikipedia(
-    user_agent='TermCorpusGenerator/1.0 (contact@example.com)',
+    user_agent=USER_AGENT,
     language='en'
 )
 

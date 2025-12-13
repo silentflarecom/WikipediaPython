@@ -14,111 +14,52 @@ A lightweight, full-stack web application designed to generate bilingual (Englis
 - **Auto-Save to Markdown**: Every search result is automatically saved as a Markdown file in the backend's `output/` directory.
 - **JSON Export**: One-click export of current search results to a JSON file from the frontend.
 
+### ⚡ New Features (v2.0)
+
+- **📚 Batch Import & Automation**: Crawl hundreds of terms automatically via text input or file upload (CSV/TXT).
+- **🇨🇳 Smart Chinese Conversion**: Automatically converts Traditional Chinese (Wikipedia default) to Simplified Chinese using `zhconv`.
+- **📊 Real-time Monitoring**: Dashboard to track crawling progress, success/failure rates, and current status.
+- **💾 Database Persistence**: Uses SQLite to store crawl history, allowing you to resume tasks or export data anytime.
+- **📥 Robust Export**: Download results as valid JSON files or UTF-8 encoded CSVs (Excel compatible).
+
 ## 🛠️ Tech Stack
 
 ### Backend
-- **FastAPI**: High-performance web framework for building APIs.
-- **Wikipedia-API**: Python wrapper for Wikipedia's API.
-- **Pydantic**: Data validation and settings management.
-- **Uvicorn**: ASGI web server implementation.
+- **FastAPI**: High-performance web framework.
+- **SQLite + aiosqlite**: Async database for managing batch tasks.
+- **Wikipedia-API**: Official MediaWiki API wrapper.
+- **zhconv**: Advanced Traditional-to-Simplified Chinese conversion.
+- **Pydantic**: Data validation.
 
 ### Frontend
-- **Vue 3**: Progressive JavaScript framework.
-- **Vite**: Next-generation frontend tooling.
-- **TailwindCSS**: Utility-first CSS framework for rapid UI development.
-- **Axios**: Promise based HTTP client.
+- **Vue 3 + Vite**: Lightning fast frontend.
+- **TailwindCSS**: Utility-first styling.
+- **Axios**: HTTP client.
 
-## 📂 Project Structure
+## ⚖️ Compliance & Best Practices
 
-```text
-WikipediaPython/
-├── backend/
-│   ├── main.py            # FastAPI application entry point
-│   ├── requirements.txt   # Python dependencies
-│   └── output/            # Generated Markdown files (auto-created)
-├── frontend/
-│   ├── src/
-│   │   └── App.vue        # Main Vue component
-│   ├── index.html         # HTML entry point (Tailwind CDN included)
-│   ├── package.json       # Node.js dependencies
-│   └── vite.config.js     # Vite configuration
-└── README.md
-```
-
-## ⚡ Quick Start
-
-### Prerequisites
-- Python 3.9+
-- Node.js & npm
-
-### 1. Start the Backend
-Navigate to the `backend` directory, install dependencies, and run the server.
-
-```bash
-cd backend
-pip install -r requirements.txt
-python main.py
-```
-*The backend API will run at `http://localhost:8000`*
-
-### 2. Start the Frontend
-Open a new terminal, navigate to the `frontend` directory, install dependencies, and start the development server.
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-*The frontend will typically run at `http://localhost:5173` (or another available port shown in the terminal).*
-
-## 📖 Usage
-
-1. Open your browser and go to the frontend URL (e.g., `http://localhost:5173`).
-2. Enter a term in the search box (e.g., "Gross Domestic Product").
-3. Click **Search** or press Enter.
-4. View the English and Chinese summaries side-by-side.
-5. Click **Export JSON** to download the data, or check the `backend/output/` folder for the Markdown file.
-
-## 🔌 API Endpoints
-
-### `GET /search`
-Searches for a term and returns bilingual data.
-
-**Query Parameters:**
-- `term` (string): The term to search for.
-
-**Response:**
-```json
-{
-  "term": "Inflation",
-  "en_summary": "In economics, inflation is...",
-  "en_url": "https://en.wikipedia.org/wiki/Inflation",
-  "zh_summary": "在经济学中，通货膨胀...",
-  "zh_url": "https://zh.wikipedia.org/wiki/%E9%80%9A%E8%B4%A7%E8%86%A8%E8%83%80"
-}
-```
+This tool is designed to strictly adhere to [Wikipedia's User-Agent Policy](https://meta.wikimedia.org/wiki/User-Agent_policy) and API Usage Guidelines:
+ 
+1.  **Official API**: Uses the standard MediaWiki API endpoints, not screen scraping.
+2.  **User-Agent**: Sends a strict, transparent header (`WikipediaTermCorpusGenerator/1.0 (Student Project; contact@silentflare.com)`) to identify the traffic source.
+3.  **Rate Limiting**: Enforces a configurable delay (default 3s) between requests used in batch mode to prevent server overload.
+4.  **Sequential Processing**: Batch tasks are processed serially to maintain a low concurrency footprint.
 
 ## 🗺️ Advanced Automation Roadmap
 
-This project is being enhanced with advanced automation capabilities to transform it from a single-term search tool into a comprehensive, self-growing knowledge corpus system.
-
 ### 🎯 Planned Features
 
-#### **Phase 1: Batch Import & Automated Crawling** ⭐ Priority
+#### **Phase 1: Batch Import & Automated Crawling** ✅ COMPLETED
 - **Batch Input Methods**: 
-  - Paste multiple terms (one per line)
-  - Upload CSV/TXT/Excel files with term lists
-  - Categorized imports with custom tags
+  - Paste multiple terms (one per line) ✅
+  - Upload CSV/TXT files ✅
 - **Automation Controls**:
-  - Concurrent crawling with rate limiting (avoid Wikipedia blocking)
-  - Real-time progress monitoring (completed/failed/total)
-  - Automatic retry mechanism for failed requests
-  - Configurable crawl intervals (e.g., 2-5 seconds between requests)
+  - Concurrent crawling with rate limiting ✅
+  - Real-time progress monitoring ✅
+  - Automatic retry mechanism ✅
 - **Results Management**:
-  - Batch export to JSON/CSV
-  - Category-based Markdown file generation
-  - Failed terms tracking for manual review
-  - Crawl history and statistics
+  - Batch export to JSON/CSV (Simplified Chinese support) ✅
+  - Database persistence ✅
 
 #### **Phase 2: Intelligent Association Crawling**
 - **Link Discovery Strategies**:

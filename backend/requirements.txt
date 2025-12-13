@@ -4,3 +4,4 @@ wikipedia-api
 pydantic
 aiosqlite
 python-multipart
+zhconv

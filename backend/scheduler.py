@@ -18,13 +18,16 @@ class BatchCrawler:
         self.crawl_interval = crawl_interval
         self.should_stop = False
         
+        # User-Agent is explicitly set to comply with Wikimedia User-Agent Policy
+        USER_AGENT = 'WikipediaTermCorpusGenerator/1.0 (Student Project; contact@silentflare.com; https://github.com/silentflarecom/WikipediaPython)'
+        
         # Initialize Wikipedia API instances
         self.wiki_en = wikipediaapi.Wikipedia(
-            user_agent='TermCorpusGenerator/1.0 (contact@example.com)',
+            user_agent=USER_AGENT,
             language='en'
         )
         self.wiki_zh = wikipediaapi.Wikipedia(
-            user_agent='TermCorpusGenerator/1.0 (contact@example.com)',
+            user_agent=USER_AGENT,
             language='zh'  # Chinese Wikipedia (content is usually in Simplified Chinese)
         )
     
@@ -50,12 +53,16 @@ class BatchCrawler:
             zh_url = ""
             
             langlinks = page_en.langlinks
+            langlinks = page_en.langlinks
             if 'zh' in langlinks:
                 zh_title = langlinks['zh'].title
                 page_zh = self.wiki_zh.page(zh_title)
                 
                 if page_zh.exists():
-                    zh_summary = page_zh.summary[0:1000] + "..." if len(page_zh.summary) > 1000 else page_zh.summary
+                    raw_zh_summary = page_zh.summary[0:1000] + "..." if len(page_zh.summary) > 1000 else page_zh.summary
+                    # Convert to Simplified Chinese
+                    import zhconv
+                    zh_summary = zhconv.convert(raw_zh_summary, 'zh-cn')
                     zh_url = page_zh.fullurl
             
             result = {
