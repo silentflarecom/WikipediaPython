@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 const emit = defineEmits(['task-created'])
@@ -13,11 +13,48 @@ const maxDepth = ref(1)
 const loading = ref(false)
 const error = ref(null)
 
+// Language selection
+const availableLanguages = ref([])
+const selectedLanguages = ref(['en', 'zh'])
+const loadingLanguages = ref(false)
+
 // Duplicate detection state
 const checkingDuplicates = ref(false)
 const duplicateResult = ref(null)
 const showDuplicateWarning = ref(false)
 const skipDuplicates = ref(true)
+
+// Load available languages on mount
+const loadLanguages = async () => {
+  loadingLanguages.value = true
+  try {
+    const response = await axios.get('http://localhost:8000/api/languages')
+    availableLanguages.value = response.data.languages
+  } catch (err) {
+    console.error('Failed to load languages:', err)
+    // Use fallback
+    availableLanguages.value = [
+      { code: 'en', name: 'English' },
+      { code: 'zh', name: '中文 (Chinese)' }
+    ]
+  } finally {
+    loadingLanguages.value = false
+  }
+}
+
+const toggleLanguage = (langCode) => {
+  const index = selectedLanguages.value.indexOf(langCode)
+  if (index === -1) {
+    selectedLanguages.value.push(langCode)
+  } else if (selectedLanguages.value.length > 1) {
+    // Always keep at least one language
+    selectedLanguages.value.splice(index, 1)
+  }
+}
+
+onMounted(() => {
+  loadLanguages()
+})
 
 const parsedTerms = computed(() => {
   if (!textInput.value.trim()) return []
@@ -132,7 +169,8 @@ const createBatchTask = async (termsToSubmit) => {
     const response = await axios.post('http://localhost:8000/api/batch/create', {
       terms: termsToSubmit,
       crawl_interval: crawlInterval.value,
-      max_depth: maxDepth.value
+      max_depth: maxDepth.value,
+      target_languages: selectedLanguages.value
     })
     
     emit('task-created', response.data)
@@ -299,6 +337,34 @@ const createBatchTask = async (termsToSubmit) => {
         </div>
         <p class="text-xs text-gray-500 mt-1">
           1 = Only input terms. 2 = Also crawl "See Also" links of input terms. 3 = Two layers deep.
+        </p>
+      </div>
+      
+      <!-- Target Languages -->
+      <div v-if="terms.length > 0" class="mt-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          🌐 Target Languages
+        </label>
+        <div v-if="loadingLanguages" class="text-sm text-gray-500">
+          Loading languages...
+        </div>
+        <div v-else class="flex flex-wrap gap-2">
+          <button
+            v-for="lang in availableLanguages"
+            :key="lang.code"
+            @click="toggleLanguage(lang.code)"
+            :class="[
+              'px-3 py-1.5 rounded-lg text-sm font-medium transition border',
+              selectedLanguages.includes(lang.code)
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+            ]"
+          >
+            {{ lang.code.toUpperCase() }} - {{ lang.name.split(' ')[0] }}
+          </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">
+          Selected: {{ selectedLanguages.join(', ') }} ({{ selectedLanguages.length }} languages)
         </p>
       </div>
       

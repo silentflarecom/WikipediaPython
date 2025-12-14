@@ -1,6 +1,7 @@
 import asyncio
+import json
 import wikipediaapi
-from typing import Dict, Callable
+from typing import Dict, Callable, List
 from database import (
     update_task_status, 
     update_term_status, 
@@ -15,79 +16,158 @@ from database import (
 # Global dictionary to track running tasks
 running_tasks: Dict[int, asyncio.Task] = {}
 
+# Common Wikipedia languages with their native names
+# Order: English first, then Traditional Chinese, Simplified Chinese, then alphabetically by code
+SUPPORTED_LANGUAGES = {
+    'en': 'English',
+    'zh-tw': '繁體中文 (Traditional Chinese)',
+    'zh': '简体中文 (Simplified Chinese)',
+    'ja': '日本語 (Japanese)',
+    'ko': '한국어 (Korean)',
+    'es': 'Español (Spanish)',
+    'fr': 'Français (French)',
+    'de': 'Deutsch (German)',
+    'ru': 'Русский (Russian)',
+    'pt': 'Português (Portuguese)',
+    'it': 'Italiano (Italian)',
+    'ar': 'العربية (Arabic)',
+    'hi': 'हिन्दी (Hindi)',
+    'vi': 'Tiếng Việt (Vietnamese)',
+    'th': 'ไทย (Thai)',
+    'id': 'Bahasa Indonesia',
+    'tr': 'Türkçe (Turkish)',
+    'pl': 'Polski (Polish)',
+    'nl': 'Nederlands (Dutch)',
+    'sv': 'Svenska (Swedish)',
+    'uk': 'Українська (Ukrainian)',
+}
+
 class BatchCrawler:
-    def __init__(self, task_id: int, crawl_interval: int = 3, max_depth: int = 1):
+    def __init__(self, task_id: int, crawl_interval: int = 3, max_depth: int = 1, target_languages: List[str] = None):
         self.task_id = task_id
         self.crawl_interval = crawl_interval
         self.max_depth = max_depth
+        self.target_languages = target_languages or ['en', 'zh']
         self.should_stop = False
         
         # User-Agent is explicitly set to comply with Wikimedia User-Agent Policy
-        USER_AGENT = 'WikipediaTermCorpusGenerator/1.0 (Student Project; contact@silentflare.com; https://github.com/silentflarecom/WikipediaPython)'
+        self.USER_AGENT = 'WikipediaTermCorpusGenerator/2.0 (Student Project; contact@silentflare.com; https://github.com/silentflarecom/WikipediaPython)'
         
-        # Initialize Wikipedia API instances
-        self.wiki_en = wikipediaapi.Wikipedia(
-            user_agent=USER_AGENT,
-            language='en'
-        )
-        self.wiki_zh = wikipediaapi.Wikipedia(
-            user_agent=USER_AGENT,
-            language='zh'  # Chinese Wikipedia (content is usually in Simplified Chinese)
-        )
+        # Initialize Wikipedia API instances dynamically for each language
+        self.wiki_instances = {}
+        for lang in self.target_languages:
+            self.wiki_instances[lang] = wikipediaapi.Wikipedia(
+                user_agent=self.USER_AGENT,
+                language=lang
+            )
+    
+    def get_wiki_instance(self, lang: str):
+        """Get or create a Wikipedia instance for a language"""
+        if lang not in self.wiki_instances:
+            self.wiki_instances[lang] = wikipediaapi.Wikipedia(
+                user_agent=self.USER_AGENT,
+                language=lang
+            )
+        return self.wiki_instances[lang]
     
     async def crawl_single_term(self, term_record: Dict) -> Dict:
-        """Crawl a single term from Wikipedia"""
+        """Crawl a single term from Wikipedia in multiple languages"""
         term = term_record['term']
         term_id = term_record['id']
         try:
             # Mark as crawling
             await update_term_status(self.task_id, term, "crawling")
             
-            # Get English page (synchronous call, but shouldn't block too long)
+            # Always start with English to get the base page
             await asyncio.sleep(0)  # Yield control
-            page_en = self.wiki_en.page(term)
+            wiki_en = self.get_wiki_instance('en')
+            page_en = wiki_en.page(term)
             
             if not page_en.exists():
                 raise Exception(f"Term '{term}' not found in English Wikipedia")
             
-            # Get English data
+            # Get English data first (always needed for associations and as base)
             en_summary = page_en.summary[0:1000] + "..." if len(page_en.summary) > 1000 else page_en.summary
             en_url = page_en.fullurl
             
-            # Get Chinese data via langlinks
-            zh_summary = "Translation not found."
-            zh_url = ""
-            
+            # Get langlinks for other languages
             langlinks = page_en.langlinks
-            langlinks = page_en.langlinks
-            if 'zh' in langlinks:
-                zh_title = langlinks['zh'].title
-                page_zh = self.wiki_zh.page(zh_title)
-                
-                if page_zh.exists():
-                    raw_zh_summary = page_zh.summary[0:1000] + "..." if len(page_zh.summary) > 1000 else page_zh.summary
-                    # Convert to Simplified Chinese
-                    try:
-                        import zhconv
-                        zh_summary = zhconv.convert(raw_zh_summary, 'zh-cn')
-                    except ImportError:
-                        zh_summary = raw_zh_summary
-                    zh_url = page_zh.fullurl
             
-            # Extract Associations
+            # Build translations dictionary for all target languages
+            translations = {}
+            for lang in self.target_languages:
+                if lang == 'en':
+                    translations['en'] = {
+                        'summary': en_summary,
+                        'url': en_url
+                    }
+                elif lang in ['zh', 'zh-tw']:
+                    # Both simplified and traditional Chinese use 'zh' langlink
+                    # We then convert based on the target variant
+                    if 'zh' in langlinks:
+                        zh_title = langlinks['zh'].title
+                        wiki_zh = self.get_wiki_instance('zh')
+                        page_zh = wiki_zh.page(zh_title)
+                        
+                        if page_zh.exists():
+                            raw_summary = page_zh.summary[0:1000] + "..." if len(page_zh.summary) > 1000 else page_zh.summary
+                            
+                            # Convert based on target variant
+                            try:
+                                import zhconv
+                                if lang == 'zh':
+                                    # Simplified Chinese
+                                    raw_summary = zhconv.convert(raw_summary, 'zh-cn')
+                                else:
+                                    # Traditional Chinese (zh-tw)
+                                    raw_summary = zhconv.convert(raw_summary, 'zh-tw')
+                            except ImportError:
+                                pass
+                            
+                            translations[lang] = {
+                                'summary': raw_summary,
+                                'url': page_zh.fullurl
+                            }
+                        else:
+                            translations[lang] = {
+                                'summary': 'Translation not found.',
+                                'url': ''
+                            }
+                    else:
+                        translations[lang] = {
+                            'summary': 'Translation not found.',
+                            'url': ''
+                        }
+                elif lang in langlinks:
+                    # Get translated page for other languages
+                    lang_title = langlinks[lang].title
+                    wiki_lang = self.get_wiki_instance(lang)
+                    page_lang = wiki_lang.page(lang_title)
+                    
+                    if page_lang.exists():
+                        raw_summary = page_lang.summary[0:1000] + "..." if len(page_lang.summary) > 1000 else page_lang.summary
+                        
+                        translations[lang] = {
+                            'summary': raw_summary,
+                            'url': page_lang.fullurl
+                        }
+                    else:
+                        translations[lang] = {
+                            'summary': 'Translation not found.',
+                            'url': ''
+                        }
+                else:
+                    translations[lang] = {
+                        'summary': 'Translation not found.',
+                        'url': ''
+                    }
+            
+            # Extract backward-compatible en/zh fields
+            zh_summary = translations.get('zh', {}).get('summary', 'Translation not found.')
+            zh_url = translations.get('zh', {}).get('url', '')
+            
+            # Extract Associations (from English page)
             associations = []
-            
-            # 1. See Also Section
-            see_also_section = page_en.section_by_title("See also")
-            if see_also_section:
-                # Naive link extraction from text might be hard with just section text
-                # wikipedia-api doesn't expose links per section easily without parsing
-                # But we can check if any of page.links contain the text in section?
-                # Actually, filtering page.links is easier.
-                pass
-            
-            # Use all links for now, filtered by some heuristics?
-            # Or just take categories
             
             # Categories
             for cat_title in page_en.categories:
@@ -124,16 +204,19 @@ class BatchCrawler:
                 "en_url": en_url,
                 "zh_summary": zh_summary,
                 "zh_url": zh_url,
+                "translations": translations,
                 "associations": associations
             }
             
             # Save to Markdown
             await self.save_to_markdown(result)
             
-            # Update database with success
+            # Update database with success - include translations JSON
+            translations_json = json.dumps(translations, ensure_ascii=False)
             await update_term_status(
                 self.task_id, term, "completed",
-                en_summary, en_url, zh_summary, zh_url
+                en_summary, en_url, zh_summary, zh_url,
+                translations=translations_json
             )
             
             return result
@@ -154,16 +237,21 @@ class BatchCrawler:
         OUTPUT_DIR = "output"
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         
-        filename = f"{result['term'].replace(' ', '_')}.md"
+        filename = f"{result['term'].replace(' ', '_').replace('/', '_')}.md"
         filepath = os.path.join(OUTPUT_DIR, filename)
         
         try:
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(f"# {result['term']}\n\n")
-                f.write(f"## English\n{result['en_summary']}\n\n[Link]({result['en_url']})\n\n")
-                f.write(f"## Chinese\n{result['zh_summary']}\n\n")
-                if result['zh_url']:
-                    f.write(f"[Link]({result['zh_url']})\n")
+                
+                # Write all translations
+                for lang, data in result.get('translations', {}).items():
+                    lang_name = SUPPORTED_LANGUAGES.get(lang, lang.upper())
+                    f.write(f"## {lang_name}\n")
+                    f.write(f"{data.get('summary', 'N/A')}\n\n")
+                    if data.get('url'):
+                        f.write(f"[Link]({data['url']})\n\n")
+                    
         except Exception as e:
             print(f"Error saving Markdown file: {e}")
     
@@ -175,8 +263,18 @@ class BatchCrawler:
             
             # Load task config if not set
             task_info = await get_task_status(self.task_id)
-            if task_info and 'max_depth' in task_info:
-                self.max_depth = task_info['max_depth'] or 1
+            if task_info:
+                if 'max_depth' in task_info:
+                    self.max_depth = task_info['max_depth'] or 1
+                if 'target_languages' in task_info and task_info['target_languages']:
+                    self.target_languages = task_info['target_languages'].split(',')
+                    # Reinitialize wiki instances with correct languages
+                    self.wiki_instances = {}
+                    for lang in self.target_languages:
+                        self.wiki_instances[lang] = wikipediaapi.Wikipedia(
+                            user_agent=self.USER_AGENT,
+                            language=lang
+                        )
             
             while not self.should_stop:
                 # Get all pending terms
@@ -203,17 +301,13 @@ class BatchCrawler:
                     
                     try:
                         result = await self.crawl_single_term(term_record)
-                        print(f"✓ Successfully crawled: {term} (Depth: {current_depth})")
+                        langs_found = [k for k, v in result.get('translations', {}).items() if v.get('summary') and v.get('summary') != 'Translation not found.']
+                        print(f"✓ Successfully crawled: {term} (Depth: {current_depth}, Languages: {', '.join(langs_found)})")
                         
                         # Handle Depth Crawling
-                        # Only add new terms if we haven't reached max depth yet
-                        # max_depth=1 means only root terms (no associations)
-                        # max_depth=2 means root + 1 layer of associations
-                        # max_depth=3 means root + 2 layers of associations
                         next_depth = current_depth + 1
                         if next_depth < self.max_depth and result.get('associations'):
                             new_terms = []
-                            # Filter associations
                             existing_terms_in_task = await get_task_terms(self.task_id)
                             existing_set = {t['term'].lower() for t in existing_terms_in_task}
                             
@@ -241,8 +335,6 @@ class BatchCrawler:
                     # Wait for the specified interval before next request
                     await asyncio.sleep(self.crawl_interval)
                 
-                # If we processed terms, check again. If pending_terms was empty, we broke out earlier.
-                # Use a small sleep to avoid tight loop if something is weird
                 if processed_in_this_batch == 0:
                    break
             
@@ -270,7 +362,7 @@ async def start_batch_crawl(task_id: int, crawl_interval: int = 3):
     if task_id in running_tasks:
         raise Exception(f"Task {task_id} is already running")
     
-    # We pass raw params here. run() fetches max_depth from DB
+    # We pass raw params here. run() fetches max_depth and target_languages from DB
     crawler = BatchCrawler(task_id, crawl_interval)
     task = asyncio.create_task(crawler.run())
     running_tasks[task_id] = task
@@ -318,3 +410,8 @@ async def retry_failed_terms(task_id: int, crawl_interval: int = 3):
     await start_batch_crawl(task_id, crawl_interval)
     
     return len(failed_terms)
+
+
+def get_supported_languages():
+    """Return list of supported Wikipedia languages"""
+    return SUPPORTED_LANGUAGES

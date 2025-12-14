@@ -18,6 +18,59 @@ const filterStatus = ref('all')
 const expandedTerm = ref(null)
 const activeTab = ref('table')
 
+// Task info (including target languages)
+const taskInfo = ref(null)
+
+// Language name mapping
+const languageNames = {
+  'en': 'English',
+  'zh-tw': 'Traditional Chinese',
+  'zh': 'Simplified Chinese',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'es': 'Spanish',
+  'fr': 'French',
+  'de': 'German',
+  'ru': 'Russian',
+  'pt': 'Portuguese',
+  'it': 'Italian',
+  'ar': 'Arabic',
+  'hi': 'Hindi',
+  'vi': 'Vietnamese',
+  'th': 'Thai',
+  'id': 'Indonesian',
+  'tr': 'Turkish',
+  'pl': 'Polish',
+  'nl': 'Dutch',
+  'sv': 'Swedish',
+  'uk': 'Ukrainian'
+}
+
+// Flag emojis for languages
+const languageFlags = {
+  'en': '🇺🇸',
+  'zh-tw': '🇹🇼',
+  'zh': '🇨🇳',
+  'ja': '🇯🇵',
+  'ko': '🇰🇷',
+  'es': '🇪🇸',
+  'fr': '🇫🇷',
+  'de': '🇩🇪',
+  'ru': '🇷🇺',
+  'pt': '🇵🇹',
+  'it': '🇮🇹',
+  'ar': '🇸🇦',
+  'hi': '🇮🇳',
+  'vi': '🇻🇳',
+  'th': '🇹🇭',
+  'id': '🇮🇩',
+  'tr': '🇹🇷',
+  'pl': '🇵🇱',
+  'nl': '🇳🇱',
+  'sv': '🇸🇪',
+  'uk': '🇺🇦'
+}
+
 // Quality state
 const qualityData = ref(null)
 const loadingQuality = ref(false)
@@ -42,6 +95,20 @@ const filteredTerms = computed(() => {
 const completedCount = computed(() => terms.value.filter(t => t.status === 'completed').length)
 const failedCount = computed(() => terms.value.filter(t => t.status === 'failed').length)
 const pendingCount = computed(() => terms.value.filter(t => t.status === 'pending').length)
+
+// Get target languages for current task
+const targetLanguages = computed(() => {
+  return taskInfo.value?.target_languages || ['en', 'zh']
+})
+
+const fetchTaskInfo = async () => {
+  try {
+    const response = await axios.get(`http://localhost:8000/api/batch/${props.taskId}/status`)
+    taskInfo.value = response.data
+  } catch (error) {
+    console.error('Error fetching task info:', error)
+  }
+}
 
 const fetchTerms = async () => {
   try {
@@ -142,6 +209,7 @@ const isExportReady = computed(() => {
 })
 
 onMounted(async () => {
+  await fetchTaskInfo()
   await fetchTerms()
   await fetchQuality()
 })
@@ -181,16 +249,16 @@ onMounted(async () => {
                 <span :class="['text-xl font-bold', getScoreColor(qualityData.quality_score)]">
                   {{ qualityData.quality_score }}
                 </span>
-                <span class="text-xs text-gray-500">分</span>
+                <span class="text-xs text-gray-500">pts</span>
               </div>
               <div>
-                <h3 class="font-bold text-gray-800">Step 1: 质量检测</h3>
+                <h3 class="font-bold text-gray-800">Step 1: Quality Check</h3>
                 <div v-if="qualityData" class="text-sm text-gray-600 mt-1">
-                  <span class="text-green-600">✓ {{ qualityData.complete_bilingual }}</span> 完整 |
-                  <span class="text-orange-600">⚠ {{ qualityData.missing_chinese }}</span> 缺中文 |
-                  <span class="text-red-600">✗ {{ qualityData.failed_terms }}</span> 失败
+                  <span class="text-green-600">✓ {{ qualityData.complete_bilingual }}</span> complete |
+                  <span class="text-orange-600">⚠ {{ qualityData.missing_chinese }}</span> missing |
+                  <span class="text-red-600">✗ {{ qualityData.failed_terms }}</span> failed
                 </div>
-                <p v-else class="text-sm text-gray-500">加载中...</p>
+                <p v-else class="text-sm text-gray-500">Loading...</p>
               </div>
             </div>
             
@@ -199,21 +267,21 @@ onMounted(async () => {
                 @click="fetchQuality"
                 class="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition"
               >
-                🔄 刷新
+                🔄 Refresh
               </button>
               <button
                 v-if="qualityData && (qualityData.failed_terms > 0 || qualityData.missing_chinese > 0)"
                 @click="showCleanOptions = true"
                 class="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition"
               >
-                🧹 清洗数据
+                🧹 Clean Data
               </button>
             </div>
           </div>
           
           <!-- Clean Result -->
           <div v-if="cleanResult" class="mt-3 p-3 bg-white rounded-lg border border-green-300">
-            <p class="text-green-700 text-sm">✅ 已清理 {{ cleanResult.total_removed }} 条数据</p>
+            <p class="text-green-700 text-sm">✅ Cleaned {{ cleanResult.total_removed }} entries</p>
           </div>
         </div>
         
@@ -221,15 +289,15 @@ onMounted(async () => {
         <div class="mb-6 p-4 rounded-xl border-2" :class="isExportReady ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-100'">
           <div class="flex items-center justify-between">
             <div>
-              <h3 class="font-bold" :class="isExportReady ? 'text-gray-800' : 'text-gray-400'">Step 2: 导出数据</h3>
+              <h3 class="font-bold" :class="isExportReady ? 'text-gray-800' : 'text-gray-400'">Step 2: Export Data</h3>
               <p v-if="!isExportReady && pendingCount > 0" class="text-sm text-gray-500 mt-1">
-                ⏳ 还有 {{ pendingCount }} 个术语待处理
+                ⏳ {{ pendingCount }} terms still pending
               </p>
               <p v-else-if="!isExportReady && completedCount === 0" class="text-sm text-gray-500 mt-1">
-                暂无可导出数据
+                No data to export
               </p>
               <p v-else class="text-sm text-gray-600 mt-1">
-                可导出 {{ completedCount }} 条数据，支持 6 种格式
+                {{ completedCount }} entries ready, 6 formats available
               </p>
             </div>
             
@@ -238,14 +306,14 @@ onMounted(async () => {
               <button
                 @click="exportResults('jsonl')"
                 class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition"
-                title="JSON Lines - 机器学习训练格式"
+                title="JSON Lines - ML Training Format"
               >
                 🤖 JSONL
               </button>
               <button
                 @click="exportResults('json')"
                 class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-                title="标准JSON格式"
+                title="Standard JSON Format"
               >
                 📄 JSON
               </button>
@@ -253,7 +321,7 @@ onMounted(async () => {
               <button
                 @click="exportResults('tmx')"
                 class="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 transition"
-                title="Translation Memory eXchange - 翻译记忆标准"
+                title="Translation Memory eXchange"
               >
                 🌐 TMX
               </button>
@@ -261,14 +329,14 @@ onMounted(async () => {
               <button
                 @click="exportResults('csv')"
                 class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
-                title="Excel兼容格式"
+                title="Excel Compatible Format"
               >
                 📊 CSV
               </button>
               <button
                 @click="exportResults('tsv')"
                 class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition"
-                title="Tab分隔格式"
+                title="Tab Separated Values"
               >
                 📋 TSV
               </button>
@@ -276,13 +344,13 @@ onMounted(async () => {
               <button
                 @click="exportResults('txt')"
                 class="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition"
-                title="纯文本双语对照"
+                title="Plain Text Bilingual"
               >
                 📝 TXT
               </button>
             </div>
             <div v-else class="text-gray-400">
-              🔒 需要先完成质量检测
+              🔒 Complete quality check first
             </div>
           </div>
         </div>
@@ -294,14 +362,14 @@ onMounted(async () => {
             class="py-2 text-sm font-medium border-b-2 transition-colors"
             :class="activeTab === 'table' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
           >
-            📋 数据列表
+            📋 Data List
           </button>
           <button
             @click="activeTab = 'graph'"
             class="py-2 text-sm font-medium border-b-2 transition-colors"
             :class="activeTab === 'graph' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
           >
-            🕸️ 知识图谱
+            🕸️ Knowledge Graph
           </button>
         </div>
 
@@ -319,7 +387,7 @@ onMounted(async () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               ]"
             >
-              全部 ({{ terms.length }})
+              All ({{ terms.length }})
             </button>
             <button
               @click="filterStatus = 'completed'"
@@ -330,7 +398,7 @@ onMounted(async () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               ]"
             >
-              ✓ 完成 ({{ completedCount }})
+              ✓ Completed ({{ completedCount }})
             </button>
             <button
               @click="filterStatus = 'failed'"
@@ -341,7 +409,7 @@ onMounted(async () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               ]"
             >
-              ✗ 失败 ({{ failedCount }})
+              ✗ Failed ({{ failedCount }})
             </button>
           </div>
           
@@ -350,7 +418,7 @@ onMounted(async () => {
             @click="retryFailed"
             class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition"
           >
-            🔄 重试失败
+            🔄 Retry Failed
           </button>
         </div>
         
@@ -364,13 +432,13 @@ onMounted(async () => {
                     #
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    术语
+                    Term
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    状态
+                    Status
                   </th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    操作
+                    Action
                   </th>
                 </tr>
               </thead>
@@ -395,7 +463,7 @@ onMounted(async () => {
                         @click="toggleExpand(term.id)"
                         class="text-blue-600 hover:text-blue-700 font-medium"
                       >
-                        {{ expandedTerm === term.id ? '收起' : '查看' }}
+                        {{ expandedTerm === term.id ? 'Hide' : 'View' }}
                       </button>
                       <span v-else-if="term.status === 'failed'" class="text-red-600 text-xs">
                         {{ term.error_message }}
@@ -406,30 +474,22 @@ onMounted(async () => {
                   <!-- Expanded Details Row -->
                   <tr v-if="expandedTerm === term.id" class="bg-gray-50">
                     <td colspan="4" class="px-6 py-4">
-                      <div class="grid grid-cols-2 gap-4">
-                        <!-- English Section -->
-                        <div>
+                      <div class="grid gap-4" :class="targetLanguages.length <= 2 ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'">
+                        <!-- Dynamic Language Sections -->
+                        <div v-for="lang in targetLanguages" :key="lang" class="bg-white p-3 rounded-lg border border-gray-200">
                           <h4 class="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-                            🇺🇸 English
-                            <a v-if="term.en_url" :href="term.en_url" target="_blank" class="text-xs text-blue-500 hover:text-blue-700">
-                              查看 →
+                            {{ languageFlags[lang] || '🌐' }} {{ languageNames[lang] || lang.toUpperCase() }}
+                            <a 
+                              v-if="term.translations?.[lang]?.url" 
+                              :href="term.translations[lang].url" 
+                              target="_blank" 
+                              class="text-xs text-blue-500 hover:text-blue-700"
+                            >
+                              View →
                             </a>
                           </h4>
-                          <p class="text-xs text-gray-600 max-h-32 overflow-y-auto custom-scrollbar bg-white p-3 rounded border border-gray-200">
-                            {{ term.en_summary || 'N/A' }}
-                          </p>
-                        </div>
-                        
-                        <!-- Chinese Section -->
-                        <div>
-                          <h4 class="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-                            🇨🇳 Chinese
-                            <a v-if="term.zh_url" :href="term.zh_url" target="_blank" class="text-xs text-blue-500 hover:text-blue-700">
-                              查看 →
-                            </a>
-                          </h4>
-                          <p class="text-xs text-gray-600 max-h-32 overflow-y-auto custom-scrollbar bg-white p-3 rounded border border-gray-200">
-                            {{ term.zh_summary || '未找到翻译' }}
+                          <p class="text-xs text-gray-600 max-h-32 overflow-y-auto custom-scrollbar">
+                            {{ term.translations?.[lang]?.summary || 'Translation not found' }}
                           </p>
                         </div>
                       </div>
@@ -443,7 +503,7 @@ onMounted(async () => {
         
         <!-- Empty State -->
         <div v-if="filteredTerms.length === 0" class="text-center py-12">
-          <p class="text-gray-500">没有找到状态为 <span class="font-medium">{{ filterStatus }}</span> 的术语</p>
+          <p class="text-gray-500">No terms found with status: <span class="font-medium">{{ filterStatus }}</span></p>
         </div>
         </div>
         
@@ -457,32 +517,32 @@ onMounted(async () => {
     <!-- Clean Options Modal -->
     <div v-if="showCleanOptions" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md mx-4">
-        <h3 class="text-xl font-bold text-gray-800 mb-4">🧹 清洗 Task #{{ taskId }} 数据</h3>
+        <h3 class="text-xl font-bold text-gray-800 mb-4">🧹 Clean Task #{{ taskId }} Data</h3>
         
         <div class="space-y-4 mb-6">
           <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
             <input type="checkbox" v-model="cleanOptions.removeFailed" class="mt-1" />
             <div>
-              <p class="font-medium text-gray-800">删除失败的术语</p>
-              <p class="text-sm text-gray-500">共 {{ qualityData?.failed_terms || 0 }} 条</p>
+              <p class="font-medium text-gray-800">Remove failed terms</p>
+              <p class="text-sm text-gray-500">{{ qualityData?.failed_terms || 0 }} entries</p>
             </div>
           </label>
           
           <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
             <input type="checkbox" v-model="cleanOptions.removeMissingChinese" class="mt-1" />
             <div>
-              <p class="font-medium text-gray-800">删除缺少中文翻译的术语</p>
-              <p class="text-sm text-gray-500">共 {{ qualityData?.missing_chinese || 0 }} 条</p>
+              <p class="font-medium text-gray-800">Remove terms missing translations</p>
+              <p class="text-sm text-gray-500">{{ qualityData?.missing_chinese || 0 }} entries</p>
             </div>
           </label>
           
           <label class="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
             <input type="checkbox" v-model="cleanOptions.removeShortSummaries" class="mt-1" />
             <div>
-              <p class="font-medium text-gray-800">删除摘要过短的术语</p>
+              <p class="font-medium text-gray-800">Remove terms with short summaries</p>
               <p class="text-sm text-gray-500">
-                英文: {{ qualityData?.en_summary_too_short || 0 }} | 
-                中文: {{ qualityData?.zh_summary_too_short || 0 }}
+                EN: {{ qualityData?.en_summary_too_short || 0 }} | 
+                ZH: {{ qualityData?.zh_summary_too_short || 0 }}
               </p>
             </div>
           </label>
@@ -494,14 +554,14 @@ onMounted(async () => {
             :disabled="cleaning"
             class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition"
           >
-            {{ cleaning ? '清理中...' : '确认清理' }}
+            {{ cleaning ? 'Cleaning...' : 'Confirm Clean' }}
           </button>
           <button
             @click="showCleanOptions = false"
             :disabled="cleaning"
             class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
           >
-            取消
+            Cancel
           </button>
         </div>
       </div>

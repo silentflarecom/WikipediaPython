@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class TermResponse(BaseModel):
@@ -8,12 +8,14 @@ class TermResponse(BaseModel):
     en_url: str
     zh_summary: str
     zh_url: str
+    translations: Optional[Dict[str, Dict[str, str]]] = None
 
 class BatchTaskCreate(BaseModel):
     terms: List[str]
     crawl_interval: int = 3
     max_depth: int = 1
     max_terms_per_layer: int = 10
+    target_languages: List[str] = ['en', 'zh']  # Default to English and Chinese
 
 class BatchTaskResponse(BaseModel):
     task_id: int
@@ -28,6 +30,7 @@ class TaskStatus(BaseModel):
     failed_terms: int
     progress_percent: float
     max_depth: int = 1
+    target_languages: List[str] = ['en', 'zh']
     created_at: str
     updated_at: str
 
@@ -45,6 +48,7 @@ class TermDetail(BaseModel):
     en_url: Optional[str] = None
     zh_summary: Optional[str] = None
     zh_url: Optional[str] = None
+    translations: Optional[Dict[str, Dict[str, str]]] = None
     error_message: Optional[str] = None
     depth_level: int = 0
     source_term_id: Optional[int] = None
@@ -57,4 +61,6 @@ class TaskListItem(BaseModel):
     total_terms: int
     completed_terms: int
     failed_terms: int
+    target_languages: Optional[str] = 'en,zh'
     created_at: str
+

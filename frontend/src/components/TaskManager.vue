@@ -66,6 +66,77 @@ const downloadBackup = () => {
   window.open('http://localhost:8000/api/system/backup', '_blank')
 }
 
+// Restore backup
+const restoreFileInput = ref(null)
+const restoring = ref(false)
+const restoreConfirm = ref(false)
+const restoreResult = ref(null)
+const selectedRestoreFile = ref(null)
+
+const triggerRestoreFileSelect = () => {
+  restoreFileInput.value?.click()
+}
+
+const handleRestoreFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  if (!file.name.endsWith('.db')) {
+    error.value = 'Please select a .db file'
+    return
+  }
+  
+  selectedRestoreFile.value = file
+  restoreConfirm.value = true
+}
+
+const restoreBackup = async () => {
+  if (!selectedRestoreFile.value) return
+  
+  restoring.value = true
+  error.value = null
+  
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedRestoreFile.value)
+    
+    const response = await axios.post(
+      'http://localhost:8000/api/system/restore?confirm=true',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }
+    )
+    
+    restoreResult.value = response.data
+    restoreConfirm.value = false
+    selectedRestoreFile.value = null
+    
+    // Reload data
+    await loadTasks()
+    await loadStatistics()
+    
+  } catch (err) {
+    error.value = err.response?.data?.detail || 'Failed to restore database'
+  } finally {
+    restoring.value = false
+    // Clear file input
+    if (restoreFileInput.value) {
+      restoreFileInput.value.value = ''
+    }
+  }
+}
+
+const cancelRestore = () => {
+  restoreConfirm.value = false
+  selectedRestoreFile.value = null
+  if (restoreFileInput.value) {
+    restoreFileInput.value.value = ''
+  }
+}
+
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
@@ -251,6 +322,39 @@ onMounted(() => {
         
         <hr class="my-4 border-gray-200" />
         
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="font-medium text-blue-700">Restore from Backup</p>
+            <p class="text-sm text-gray-500">Upload a previously downloaded .db backup file</p>
+          </div>
+          <div>
+            <input
+              ref="restoreFileInput"
+              type="file"
+              accept=".db"
+              @change="handleRestoreFileSelect"
+              class="hidden"
+            />
+            <button
+              @click="triggerRestoreFileSelect"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              📤 Upload Backup
+            </button>
+          </div>
+        </div>
+        
+        <!-- Restore Result Message -->
+        <div v-if="restoreResult" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p class="text-green-700 text-sm">
+            ✅ {{ restoreResult.message }} - 
+            {{ restoreResult.tasks_restored }} tasks, 
+            {{ restoreResult.terms_restored }} terms restored
+          </p>
+        </div>
+        
+        <hr class="my-4 border-gray-200" />
+        
         <div class="flex items-center justify-between">
           <div>
             <p class="font-medium text-red-700">Reset All Data</p>
@@ -291,6 +395,39 @@ onMounted(() => {
               <button
                 @click="resetConfirm = false"
                 :disabled="resetting"
+                class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Restore Confirmation Modal -->
+        <div v-if="restoreConfirm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md mx-4">
+            <h3 class="text-xl font-bold text-blue-700 mb-2">📤 Confirm Database Restore</h3>
+            <p class="text-gray-600 mb-4">
+              You are about to restore the database from:
+            </p>
+            <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+              <p class="text-blue-800 font-medium">{{ selectedRestoreFile?.name }}</p>
+              <p class="text-blue-600 text-sm">{{ formatBytes(selectedRestoreFile?.size || 0) }}</p>
+            </div>
+            <p class="text-amber-600 font-medium mb-4">
+              ⚠️ This will replace all current data! A backup of current data will be saved.
+            </p>
+            <div class="flex gap-3">
+              <button
+                @click="restoreBackup"
+                :disabled="restoring"
+                class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+              >
+                {{ restoring ? 'Restoring...' : 'Yes, Restore' }}
+              </button>
+              <button
+                @click="cancelRestore"
+                :disabled="restoring"
                 class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
               >
                 Cancel

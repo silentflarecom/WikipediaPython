@@ -22,7 +22,7 @@ from database import (
     check_existing_terms, delete_task, reset_database, get_corpus_statistics,
     analyze_data_quality, clean_task_data, get_terms_by_quality_issue
 )
-from scheduler import start_batch_crawl, cancel_batch_crawl, retry_failed_terms
+from scheduler import start_batch_crawl, cancel_batch_crawl, retry_failed_terms, get_supported_languages
 from models import Association
 
 # Lifespan context manager for startup/shutdown events
@@ -113,6 +113,21 @@ def search_term(term: str):
     return result
 
 
+# ========== Language Support ==========
+
+@app.get("/api/languages")
+async def list_supported_languages():
+    """Get list of supported Wikipedia languages"""
+    languages = get_supported_languages()
+    return {
+        "languages": [
+            {"code": code, "name": name}
+            for code, name in languages.items()
+        ],
+        "total": len(languages)
+    }
+
+
 # ========== Batch Processing Endpoints (New) ==========
 
 @app.post("/api/batch/create", response_model=BatchTaskResponse)
@@ -127,8 +142,20 @@ async def create_batch(batch_data: BatchTaskCreate):
     if not unique_terms:
         raise HTTPException(status_code=400, detail="No valid terms provided")
     
-    # Create task
-    task_id = await create_batch_task(len(unique_terms), batch_data.crawl_interval, batch_data.max_depth)
+    # Validate target languages
+    supported = get_supported_languages()
+    for lang in batch_data.target_languages:
+        if lang not in supported:
+            raise HTTPException(status_code=400, detail=f"Unsupported language: {lang}")
+    
+    # Create task with target_languages
+    target_languages_str = ','.join(batch_data.target_languages)
+    task_id = await create_batch_task(
+        len(unique_terms), 
+        batch_data.crawl_interval, 
+        batch_data.max_depth,
+        target_languages_str
+    )
     
     # Add terms to task
     await add_terms_to_task(task_id, unique_terms)
@@ -136,7 +163,7 @@ async def create_batch(batch_data: BatchTaskCreate):
     return BatchTaskResponse(
         task_id=task_id,
         total_terms=len(unique_terms),
-        message=f"Batch task created with {len(unique_terms)} terms (Depth: {batch_data.max_depth})"
+        message=f"Batch task created with {len(unique_terms)} terms (Depth: {batch_data.max_depth}, Languages: {', '.join(batch_data.target_languages)})"
     )
 
 
@@ -215,6 +242,11 @@ async def get_status(task_id: int):
     if task['total_terms'] > 0:
         progress = round((task['completed_terms'] + task['failed_terms']) / task['total_terms'] * 100, 2)
     
+    # Parse target_languages string to list
+    target_languages = ['en', 'zh']  # default
+    if task.get('target_languages'):
+        target_languages = task['target_languages'].split(',')
+    
     return TaskStatus(
         task_id=task['id'],
         status=task['status'],
@@ -223,15 +255,25 @@ async def get_status(task_id: int):
         failed_terms=task['failed_terms'],
         progress_percent=progress,
         max_depth=task.get('max_depth', 1),
+        target_languages=target_languages,
         created_at=task['created_at'],
         updated_at=task['updated_at']
     )
 
 
-@app.get("/api/batch/{task_id}/terms", response_model=List[TermDetail])
+@app.get("/api/batch/{task_id}/terms")
 async def get_terms(task_id: int, status: str = None):
     """Get all terms for a task, optionally filtered by status"""
     terms = await get_task_terms(task_id, status)
+    
+    # Parse translations JSON string to dict for each term
+    for term in terms:
+        if term.get('translations') and isinstance(term['translations'], str):
+            try:
+                term['translations'] = json.loads(term['translations'])
+            except json.JSONDecodeError:
+                term['translations'] = None
+    
     return terms
 
 
@@ -276,21 +318,53 @@ async def export_results(task_id: int, format: str = "json"):
     """Export task results in various formats
     
     Supported formats:
-    - json: Standard JSON array
+    - json: Standard JSON array with all translations
     - jsonl: JSON Lines (one JSON object per line) - ML training ready
     - csv: Comma-separated values with UTF-8 BOM for Excel
     - tsv: Tab-separated values
-    - tmx: Translation Memory eXchange format
-    - txt: Plain text bilingual pairs
+    - tmx: Translation Memory eXchange format (all language pairs)
+    - txt: Plain text multilingual
     """
     terms = await get_task_terms(task_id, "completed")
     
     if not terms:
         raise HTTPException(status_code=404, detail="No completed terms found")
     
+    # Parse translations JSON for each term
+    for term in terms:
+        if term.get('translations') and isinstance(term['translations'], str):
+            try:
+                term['translations'] = json.loads(term['translations'])
+            except json.JSONDecodeError:
+                term['translations'] = {}
+        elif not term.get('translations'):
+            term['translations'] = {}
+    
+    # Get task info for target languages
+    task = await get_task_status(task_id)
+    target_languages = ['en', 'zh']  # default
+    if task and task.get('target_languages'):
+        target_languages = task['target_languages'].split(',')
+    
     if format == "json":
-        # Standard JSON array
-        json_content = json.dumps(terms, ensure_ascii=False, indent=2)
+        # Standard JSON array - include all metadata
+        export_data = []
+        for term in terms:
+            item = {
+                "id": term.get('id'),
+                "task_id": term.get('task_id'),
+                "term": term['term'],
+                "status": term.get('status'),
+                "error_message": term.get('error_message'),
+                "created_at": term.get('created_at'),
+                "updated_at": term.get('updated_at'),
+                "depth_level": term.get('depth_level', 0),
+                "source_term_id": term.get('source_term_id'),
+                "translations": term.get('translations', {})
+            }
+            export_data.append(item)
+        
+        json_content = json.dumps(export_data, ensure_ascii=False, indent=2)
         return StreamingResponse(
             iter([json_content]),
             media_type="application/json",
@@ -298,16 +372,19 @@ async def export_results(task_id: int, format: str = "json"):
         )
     
     elif format == "jsonl":
-        # JSON Lines format - one JSON object per line
+        # JSON Lines format - one JSON object per line, includes key metadata
         lines = []
         for term in terms:
             obj = {
+                "id": term.get('id'),
                 "term": term['term'],
-                "en": term['en_summary'] or '',
-                "zh": term['zh_summary'] or '',
-                "en_url": term['en_url'] or '',
-                "zh_url": term['zh_url'] or ''
+                "depth_level": term.get('depth_level', 0)
             }
+            translations = term.get('translations', {})
+            for lang in target_languages:
+                if lang in translations:
+                    obj[lang] = translations[lang].get('summary', '')
+                    obj[f'{lang}_url'] = translations[lang].get('url', '')
             lines.append(json.dumps(obj, ensure_ascii=False))
         
         content = '\n'.join(lines)
@@ -318,22 +395,28 @@ async def export_results(task_id: int, format: str = "json"):
         )
     
     elif format == "csv":
-        # CSV with UTF-8 BOM for Excel compatibility
+        # CSV with UTF-8 BOM for Excel compatibility - dynamic columns based on languages
         output = io.BytesIO()
         output.write(b'\xef\xbb\xbf')  # UTF-8 BOM
         
         csv_content = io.StringIO()
         writer = csv.writer(csv_content)
-        writer.writerow(['Term', 'English Summary', 'English URL', 'Chinese Summary', 'Chinese URL'])
+        
+        # Dynamic header based on target languages
+        header = ['ID', 'Term']
+        for lang in target_languages:
+            header.extend([f'{lang.upper()} Summary', f'{lang.upper()} URL'])
+        writer.writerow(header)
         
         for term in terms:
-            writer.writerow([
-                term['term'],
-                term['en_summary'] or '',
-                term['en_url'] or '',
-                term['zh_summary'] or '',
-                term['zh_url'] or ''
-            ])
+            row = [term.get('id', ''), term['term']]
+            translations = term.get('translations', {})
+            for lang in target_languages:
+                if lang in translations:
+                    row.extend([translations[lang].get('summary', ''), translations[lang].get('url', '')])
+                else:
+                    row.extend(['', ''])
+            writer.writerow(row)
         
         output.write(csv_content.getvalue().encode('utf-8'))
         output.seek(0)
@@ -345,16 +428,27 @@ async def export_results(task_id: int, format: str = "json"):
         )
     
     elif format == "tsv":
-        # Tab-separated values
+        # Tab-separated values - dynamic columns
         output = io.BytesIO()
         output.write(b'\xef\xbb\xbf')  # UTF-8 BOM
         
-        lines = ["Term\tEnglish Summary\tChinese Summary\tEnglish URL\tChinese URL"]
+        # Header
+        header_parts = ['ID', 'Term']
+        for lang in target_languages:
+            header_parts.extend([f'{lang.upper()} Summary', f'{lang.upper()} URL'])
+        lines = ['\t'.join(header_parts)]
+        
         for term in terms:
-            # Replace tabs and newlines in content
-            en_summary = (term['en_summary'] or '').replace('\t', ' ').replace('\n', ' ')
-            zh_summary = (term['zh_summary'] or '').replace('\t', ' ').replace('\n', ' ')
-            lines.append(f"{term['term']}\t{en_summary}\t{zh_summary}\t{term['en_url'] or ''}\t{term['zh_url'] or ''}")
+            row_parts = [str(term.get('id', '')), term['term']]
+            translations = term.get('translations', {})
+            for lang in target_languages:
+                if lang in translations:
+                    summary = translations[lang].get('summary', '').replace('\t', ' ').replace('\n', ' ')
+                    url = translations[lang].get('url', '')
+                    row_parts.extend([summary, url])
+                else:
+                    row_parts.extend(['', ''])
+            lines.append('\t'.join(row_parts))
         
         output.write('\n'.join(lines).encode('utf-8'))
         output.seek(0)
@@ -366,7 +460,7 @@ async def export_results(task_id: int, format: str = "json"):
         )
     
     elif format == "tmx":
-        # Translation Memory eXchange format
+        # Translation Memory eXchange format - all language pairs
         tmx_lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<!DOCTYPE tmx SYSTEM "tmx14.dtd">',
@@ -376,19 +470,21 @@ async def export_results(task_id: int, format: str = "json"):
         ]
         
         for term in terms:
-            en_text = (term['en_summary'] or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            zh_text = (term['zh_summary'] or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            translations = term.get('translations', {})
+            tmx_lines.append(f'    <tu tuid="{term["term"]}">')
             
-            tmx_lines.extend([
-                f'    <tu tuid="{term["term"]}">',
-                f'      <tuv xml:lang="en">',
-                f'        <seg>{en_text}</seg>',
-                f'      </tuv>',
-                f'      <tuv xml:lang="zh">',
-                f'        <seg>{zh_text}</seg>',
-                f'      </tuv>',
-                f'    </tu>'
-            ])
+            for lang in target_languages:
+                if lang in translations:
+                    text = (translations[lang].get('summary', '') or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    # Map zh-tw to proper language code
+                    lang_code = 'zh-TW' if lang == 'zh-tw' else ('zh-CN' if lang == 'zh' else lang)
+                    tmx_lines.extend([
+                        f'      <tuv xml:lang="{lang_code}">',
+                        f'        <seg>{text}</seg>',
+                        f'      </tuv>'
+                    ])
+            
+            tmx_lines.append('    </tu>')
         
         tmx_lines.extend([
             '  </body>',
@@ -403,19 +499,26 @@ async def export_results(task_id: int, format: str = "json"):
         )
     
     elif format == "txt":
-        # Plain text bilingual pairs
-        lines = [f"# Task {task_id} Bilingual Corpus", f"# Total: {len(terms)} terms", ""]
+        # Plain text multilingual
+        lines = [f"# Task {task_id} Multilingual Corpus", f"# Total: {len(terms)} terms", f"# Languages: {', '.join(target_languages)}", ""]
         
         for i, term in enumerate(terms, 1):
+            translations = term.get('translations', {})
+            term_id = term.get('id', 'N/A')
             lines.extend([
-                f"[{i}] {term['term']}",
-                "-" * 50,
-                "EN:",
-                term['en_summary'] or 'N/A',
-                "",
-                "ZH:",
-                term['zh_summary'] or 'N/A',
-                "",
+                f"[{i}] ID:{term_id} - {term['term']}",
+                "-" * 50
+            ])
+            
+            for lang in target_languages:
+                if lang in translations:
+                    lines.extend([
+                        f"{lang.upper()}:",
+                        translations[lang].get('summary', 'N/A') or 'N/A',
+                        ""
+                    ])
+            
+            lines.extend([
                 "=" * 50,
                 ""
             ])
@@ -543,6 +646,92 @@ async def backup_database():
         filename="corpus_backup.db",
         media_type="application/octet-stream"
     )
+
+
+@app.post("/api/system/restore")
+async def restore_database(file: UploadFile = File(...), confirm: bool = False):
+    """Restore database from a backup file
+    
+    The uploaded file must be a valid SQLite database with the correct schema.
+    This will replace the current database - use with caution!
+    """
+    if not confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Must set confirm=true to restore database. This will replace all current data!"
+        )
+    
+    # Validate file extension
+    if not file.filename.endswith('.db'):
+        raise HTTPException(status_code=400, detail="File must be a .db file")
+    
+    # Save to temp file first
+    import tempfile
+    import shutil
+    import sqlite3
+    
+    temp_path = None
+    try:
+        # Save uploaded file to temp location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.db') as temp_file:
+            temp_path = temp_file.name
+            content = await file.read()
+            temp_file.write(content)
+        
+        # Verify it's a valid SQLite database
+        try:
+            conn = sqlite3.connect(temp_path)
+            cursor = conn.cursor()
+            
+            # Check for required tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            
+            required_tables = ['batch_tasks', 'terms']
+            for table in required_tables:
+                if table not in tables:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid backup file: missing required table '{table}'"
+                    )
+            
+            # Get counts for response
+            cursor.execute("SELECT COUNT(*) FROM batch_tasks")
+            task_count = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM terms")
+            term_count = cursor.fetchone()[0]
+            
+            conn.close()
+            
+        except sqlite3.Error as e:
+            raise HTTPException(status_code=400, detail=f"Invalid SQLite database: {str(e)}")
+        
+        # Backup current database before replacing
+        current_db = "corpus.db"
+        backup_path = "corpus_before_restore.db"
+        if os.path.exists(current_db):
+            shutil.copy(current_db, backup_path)
+        
+        # Replace current database
+        shutil.move(temp_path, current_db)
+        temp_path = None  # Already moved
+        
+        return {
+            "message": "Database restored successfully",
+            "tasks_restored": task_count,
+            "terms_restored": term_count,
+            "previous_backup": backup_path
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error restoring database: {str(e)}")
+    finally:
+        # Clean up temp file if it still exists
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 # ========== Sprint 2: Data Quality Control ==========

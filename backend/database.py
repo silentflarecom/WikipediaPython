@@ -58,6 +58,10 @@ async def init_database():
         await add_column_if_not_exists(db, "terms", "depth_level", "INTEGER DEFAULT 0")
         await add_column_if_not_exists(db, "terms", "source_term_id", "INTEGER")
         
+        # Multi-language support columns
+        await add_column_if_not_exists(db, "batch_tasks", "target_languages", "TEXT DEFAULT 'en,zh'")
+        await add_column_if_not_exists(db, "terms", "translations", "TEXT")  # JSON: {"lang": {"summary": "...", "url": "..."}}
+        
         # Create indexes
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_task_id ON terms(task_id)
@@ -82,13 +86,13 @@ async def add_column_if_not_exists(db, table, column, definition):
         # Ignore error if column already exists
         pass
 
-async def create_batch_task(total_terms: int, crawl_interval: int = 3, max_depth: int = 1) -> int:
+async def create_batch_task(total_terms: int, crawl_interval: int = 3, max_depth: int = 1, target_languages: str = "en,zh") -> int:
     """Create a new batch task and return its ID"""
     async with aiosqlite.connect(DATABASE_FILE) as db:
         cursor = await db.execute("""
-            INSERT INTO batch_tasks (status, total_terms, crawl_interval, max_depth)
-            VALUES (?, ?, ?, ?)
-        """, ("pending", total_terms, crawl_interval, max_depth))
+            INSERT INTO batch_tasks (status, total_terms, crawl_interval, max_depth, target_languages)
+            VALUES (?, ?, ?, ?, ?)
+        """, ("pending", total_terms, crawl_interval, max_depth, target_languages))
         await db.commit()
         return cursor.lastrowid
 
@@ -121,15 +125,18 @@ async def update_task_status(task_id: int, status: str):
 async def update_term_status(task_id: int, term: str, status: str, 
                             en_summary: str = None, en_url: str = None,
                             zh_summary: str = None, zh_url: str = None,
-                            error_message: str = None):
-    """Update the status and data of a term"""
+                            error_message: str = None, translations: str = None):
+    """Update the status and data of a term
+    
+    translations: JSON string with format {"lang": {"summary": "...", "url": "..."}}
+    """
     async with aiosqlite.connect(DATABASE_FILE) as db:
         await db.execute("""
             UPDATE terms
             SET status = ?, en_summary = ?, en_url = ?, zh_summary = ?, zh_url = ?,
-                error_message = ?, updated_at = CURRENT_TIMESTAMP
+                error_message = ?, translations = ?, updated_at = CURRENT_TIMESTAMP
             WHERE task_id = ? AND term = ?
-        """, (status, en_summary, en_url, zh_summary, zh_url, error_message, task_id, term))
+        """, (status, en_summary, en_url, zh_summary, zh_url, error_message, translations, task_id, term))
         await db.commit()
 
 async def update_task_counters(task_id: int):
