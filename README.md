@@ -1,16 +1,28 @@
 # Term Corpus Generator
 
-A lightweight, full-stack web application designed to generate bilingual (English & Chinese) corpus data for economic and general terms. Built with **FastAPI** and **Vue 3**.
+A lightweight, full-stack web application designed to generate **multilingual corpus data** for economic and general terms. Built with **FastAPI** and **Vue 3**.
+
+Supports **20+ languages** including English, Traditional Chinese, Simplified Chinese, Japanese, Korean, Spanish, French, German, Russian, and more.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Vue](https://img.shields.io/badge/vue-3.x-green.svg)
 
+## 📖 Quick Start
+
+**⚠️ IMPORTANT**: Before running this application, you must configure your own User-Agent. See **[SETUP.md](SETUP.md)** for detailed installation and configuration instructions.
+
+**TL;DR:**
+1. Install dependencies (Python + Node.js)
+2. Start backend and frontend servers
+3. **Configure User-Agent in the Manage page** (required by Wikipedia API)
+4. Start crawling!
+
 ## 🚀 Features
 
-- **Instant Bilingual Search**: Input a term (e.g., "Inflation") and retrieve its summary in both English and Chinese simultaneously.
+- **Instant Multilingual Search**: Input a term (e.g., "Inflation") and retrieve its summary in 20+ languages simultaneously.
 - **Wikipedia Integration**: Automatically fetches data from Wikipedia using the `wikipedia-api` library, leveraging language links for accurate cross-lingual mapping.
-- **Dual-View Interface**: Clean, modern UI displaying English and Chinese definitions side-by-side.
+- **Multi-Language Interface**: Clean, modern UI displaying multiple language definitions with flags and labels.
 - **Auto-Save to Markdown**: Every search result is automatically saved as a Markdown file in the backend's `output/` directory.
 - **JSON Export**: One-click export of current search results to a JSON file from the frontend.
 
@@ -30,7 +42,37 @@ A lightweight, full-stack web application designed to generate bilingual (Englis
 - **�️ Multi-Format Export**: Export knowledge graphs as PNG (high-res), SVG (editable), or JSON (data).
 - **🎯 Smart Label Display**: Only shows labels for root and first-layer nodes to reduce visual clutter.
 
-## �🛠️ Tech Stack
+### 🌍 New Features (v2.2 - Multilingual Expansion)
+
+- **🌐 20+ Language Support**: Crawl Wikipedia content in 20+ languages including Traditional Chinese (繁體中文), Japanese (日本語), Korean (한국어), Spanish, French, German, Russian, and more.
+- **🇹🇼 Traditional Chinese**: Added Traditional Chinese support with automatic variant conversion using `zhconv`.
+- **📝 Dynamic Language Selection**: Choose target languages before each crawl from an intuitive multi-select interface.
+- **🔄 Auto-Translation Discovery**: Uses Wikipedia's language links to find corresponding articles across all selected languages.
+- **📊 Multi-Language Display**: View all translations side-by-side in the results table with language-specific flags and labels.
+
+### 🛠️ New Features (v2.3 - Data Management & Quality Control)
+
+- **💾 Database Backup & Restore**: 
+  - Download complete database backups (`.db` files)
+  - Upload and restore from previous backups with safety checks
+  - Automatic backup before restore operations
+- **📤 Enhanced Export Formats**:
+  - **JSON**: Complete metadata including ID, status, timestamps, depth_level, and all translations
+  - **JSONL**: Machine learning ready format with dynamic language columns
+  - **CSV/TSV**: Excel-compatible with ID column and all selected languages
+  - **TMX**: Professional translation memory format for CAT tools
+  - **TXT**: Human-readable multilingual format
+- **🧹 Data Quality Tools**:
+  - Quality analysis dashboard showing completion rates and issues
+  - Clean data wizard to remove failed/incomplete entries
+  - Filter and view problematic terms
+- **🌐 English UI**: Complete interface localization (UI in English, content in selected languages)
+- **⚙️ System Configuration**:
+  - Editable User-Agent settings (required by Wikipedia API)
+  - Settings persist across sessions
+  - No server restart required
+
+## 🛠️ Tech Stack
 
 ### Backend
 - **FastAPI**: High-performance web framework.
@@ -50,9 +92,15 @@ A lightweight, full-stack web application designed to generate bilingual (Englis
 This tool is designed to strictly adhere to [Wikipedia's User-Agent Policy](https://meta.wikimedia.org/wiki/User-Agent_policy) and API Usage Guidelines:
  
 1.  **Official API**: Uses the standard MediaWiki API endpoints, not screen scraping.
-2.  **User-Agent**: Sends a strict, transparent header (`WikipediaTermCorpusGenerator/1.0 (Student Project; contact@silentflare.com)`) to identify the traffic source.
+2.  **User-Agent**: 
+    - ⚠️ **You MUST configure your own User-Agent** before using this tool
+    - Access the **Manage** page → **System Configuration** to set your User-Agent
+    - Must include your project name and contact information (email or GitHub URL)
+    - Example: `YourProject/1.0 (your-email@example.com)` or `YourProject/1.0 (https://github.com/YourUsername/YourRepo)`
+    - See [SETUP.md](SETUP.md) for detailed instructions
 3.  **Rate Limiting**: Enforces a configurable delay (default 3s) between requests used in batch mode to prevent server overload.
 4.  **Sequential Processing**: Batch tasks are processed serially to maintain a low concurrency footprint.
+5.  **Privacy**: Database files are gitignored by default. No personal data is collected or transmitted.
 
 ## 🗺️ Advanced Automation Roadmap
 
@@ -86,39 +134,56 @@ This tool is designed to strictly adhere to [Wikipedia's User-Agent Policy](http
   - **Multi-format export: PNG, SVG, JSON** ✅
   - Smart full-graph capture (ignores zoom state) ✅
 
-#### **Phase 3: Corpus Quality & Data Management** 🎯 IN PROGRESS
+#### **Phase 3: Corpus Quality & Data Management** ✅ COMPLETED
 - **Term Deduplication**:
-  - Detect duplicate terms before batch crawling
-  - UI warning for existing terms with skip/force options
-  - Global duplicate check across all tasks
+  - Detect duplicate terms before batch crawling ✅
+  - UI warning for existing terms with skip/force options ✅
+  - Global duplicate check across all tasks ✅
 - **Data Quality Control**:
-  - Automatic quality analysis (missing translations, short summaries)
-  - Quality report dashboard
-  - Data cleaning tools (remove failed/low-quality entries)
+  - Automatic quality analysis (missing translations, short summaries) ✅
+  - Quality report dashboard ✅
+  - Data cleaning tools (remove failed/low-quality entries) ✅
 - **Batch Task Management**:
-  - View all historical batch tasks
-  - Delete/archive old tasks
-  - Merge multiple tasks into unified corpus
+  - View all historical batch tasks ✅
+  - Delete/archive old tasks ✅
+  - Merge multiple tasks into unified corpus (Partial: export-based merging possible)
 
-#### **Phase 4: Advanced Export & Persistence**
+#### **Phase 4: Advanced Export & Persistence** ✅ COMPLETED
 - **Multi-Format Export**:
-  - JSONL (one JSON object per line) - ML training ready
-  - TMX (Translation Memory eXchange) - CAT tool compatible
-  - TSV (Tab-separated values) - Excel/Pandas friendly
-  - TXT (Plain text bilingual pairs) - Simple readable format
-  - Parquet (Optional) - Big data processing
+  - JSONL (one JSON object per line) - ML training ready ✅
+  - TMX (Translation Memory eXchange) - CAT tool compatible ✅
+  - TSV (Tab-separated values) - Excel/Pandas friendly ✅
+  - TXT (Plain text bilingual pairs) - Simple readable format ✅
+  - ~~Parquet (Optional) - Big data processing~~ (Not implemented - not needed for current scale)
 - **Data Persistence**:
-  - Database backup/restore functionality
-  - Complete data reset with confirmation
-  - Export entire corpus as portable file
+  - Database backup/restore functionality ✅
+  - Complete data reset with confirmation ✅
+  - Export entire corpus as portable file ✅
 
-#### **Phase 5: Corpus Statistics & Analytics**
+#### **Phase 5: Multilingual Wikipedia Expansion** ✅ COMPLETED
+- **Multi-Language Support**:
+  - Support for 20+ Wikipedia languages ✅
+  - Traditional Chinese (zh-tw) and Simplified Chinese (zh) ✅
+  - Dynamic language selection per task ✅
+  - Automatic variant conversion (zhconv) ✅
+- **Language Detection & Linking**:
+  - Use Wikipedia langlinks for translation discovery ✅
+  - Store translations in structured JSON format ✅
+  - Multi-language display in results table ✅
+
+#### **Phase 6: System Configuration & Compliance** ✅ COMPLETED
+- **User-Agent Configuration**:
+  - Editable User-Agent in UI (Manage page) ✅
+  - Persistent settings storage in database ✅
+  - Wikipedia API compliance ✅
+
+#### **Phase 7: Corpus Statistics & Analytics** (Future Enhancement)
 - **Statistics Dashboard**:
-  - Total terms / bilingual pairs count
+  - Total terms / bilingual pairs count ✅ (Basic stats implemented)
   - Character count (EN/ZH separately)
   - Average summary length
-  - Database size metrics
-  - Knowledge graph node/edge counts
+  - Database size metrics ✅ (Implemented)
+  - Knowledge graph node/edge counts ✅ (Implemented)
 - **Coverage Analysis**:
   - Success rate visualization
   - Missing translation tracking
@@ -149,37 +214,102 @@ frontend/src/
     └── ResultsTable.vue       # Results data table
 ```
 
-**Database Schema** (SQLite for Phase 1):
+**Database Schema** (Current Implementation):
 ```sql
 -- Batch tasks tracking
-CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY,
-    status TEXT,
-    created_at TIMESTAMP,
-    total_terms INTEGER,
-    completed INTEGER
+CREATE TABLE batch_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL,
+    total_terms INTEGER DEFAULT 0,
+    completed_terms INTEGER DEFAULT 0,
+    failed_terms INTEGER DEFAULT 0,
+    max_depth INTEGER DEFAULT 1,
+    target_languages TEXT DEFAULT 'en,zh',  -- Comma-separated language codes
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Individual terms
 CREATE TABLE terms (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id INTEGER,
-    term TEXT,
-    status TEXT,
+    term TEXT NOT NULL,
+    status TEXT NOT NULL,
     en_summary TEXT,
+    en_url TEXT,
     zh_summary TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
+    zh_url TEXT,
+    translations TEXT,  -- JSON string: {"lang": {"summary": "...", "url": "..."}}
+    error_message TEXT,
+    depth_level INTEGER DEFAULT 0,
+    source_term_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES batch_tasks(id)
+);
+
+-- Term associations (for knowledge graph)
+CREATE TABLE term_associations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_term_id INTEGER,
+    target_term TEXT,
+    association_type TEXT,
+    weight REAL DEFAULT 1.0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (source_term_id) REFERENCES terms(id)
+);
+
+-- System settings (User-Agent, etc.)
+CREATE TABLE system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 📈 Implementation Priority
+### 📈 Implementation Status
 
-1. **Immediate** (Phase 1): Batch crawling - 10x efficiency boost with minimal complexity
-2. **Short-term** (Phases 2-3): Intelligent crawling and scheduling - transform into self-growing knowledge base
-3. **Mid-term** (Phases 4-5): Multi-source and AI enhancement - professional-grade corpus quality
-4. **Long-term** (Phase 6): Distributed architecture - only when corpus exceeds 10,000+ terms
+**✅ Completed Phases:**
+1. **Phase 1** (v2.0): Batch Import & Automated Crawling - Core automation infrastructure
+2. **Phase 2** (v2.1): Intelligent Association Crawling & Knowledge Graph - Self-growing knowledge base
+3. **Phase 3** (v2.2): Corpus Quality & Data Management - Quality control and task management
+4. **Phase 4** (v2.3): Advanced Export & Persistence - Professional export formats and backup/restore
+5. **Phase 5** (v2.2): Multilingual Wikipedia Expansion - 20+ language support
+6. **Phase 6** (v2.3): System Configuration & Compliance - User-Agent settings and API compliance
+
+**🎯 Future Enhancements (Phase 7+):**
+- Advanced statistics and analytics dashboard
+- Character-level corpus analysis
+- Domain tagging and classification
+- Distributed crawling architecture (for 10,000+ terms scale)
 
 ---
 
-*This roadmap reflects the evolution from a simple search tool to an enterprise-grade knowledge corpus management system.*
+## 📝 Recent Updates
+
+### v2.3 - Data Management & System Settings (December 2025)
+- ✅ Complete database backup and restore functionality
+- ✅ Enhanced export with full metadata (JSON, JSONL, CSV, TSV, TMX, TXT)
+- ✅ Data quality analysis and cleaning tools
+- ✅ System configuration panel for User-Agent settings
+- ✅ Complete English UI localization
+- ✅ Privacy protection: Removed personal info from default configs
+- ✅ Added .gitignore for database and sensitive files
+- ✅ Created SETUP.md with User-Agent configuration guide
+
+### v2.2 - Multilingual Expansion (December 2025)
+- ✅ Support for 20+ Wikipedia languages
+- ✅ Traditional Chinese (繁體中文) with automatic conversion
+- ✅ Dynamic language selection per crawl task
+- ✅ Multi-language results display with flags
+- ✅ Translations stored in structured JSON format
+
+### v2.1 - Knowledge Graph (Previous Release)
+- ✅ Interactive D3.js force-directed graph visualization
+- ✅ Depth-controlled intelligent association crawling
+- ✅ Multi-format graph export (PNG, SVG, JSON)
+
+---
+
+*This project has evolved from a simple bilingual search tool to a comprehensive multilingual knowledge corpus management system supporting 20+ languages.*
+

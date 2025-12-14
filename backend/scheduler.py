@@ -53,7 +53,7 @@ class BatchCrawler:
         
         # User-Agent is explicitly set to comply with Wikimedia User-Agent Policy
         # Use provided user_agent or fallback to default
-        default_ua = 'WikipediaTermCorpusGenerator/2.0 (Student Project; contact@silentflare.com; https://github.com/silentflarecom/WikipediaPython)'
+        default_ua = 'TermCorpusBot/1.0 (Educational Project; mailto:your-email@example.com)'
         self.USER_AGENT = user_agent or default_ua
         
         # Initialize Wikipedia API instances dynamically for each language

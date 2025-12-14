@@ -242,16 +242,38 @@ onMounted(() => {
         </div>
       </div>
       <div class="p-6">
-        <label class="block mb-2 font-medium text-gray-700">User Agent</label>
-        <p class="text-xs text-gray-500 mb-3">
-          Required by Wikipedia API. Must include project name and contact info (email or URL).
-          <br>Default: <code>WikipediaTermCorpusGenerator/2.0 (Student Project; contact@example.com)</code>
+        <label class="block mb-2 font-bold text-gray-800 text-base">User Agent Configuration</label>
+        
+        <!-- Warning Box -->
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm font-bold text-yellow-800">⚠️ REQUIRED: You MUST configure your own User-Agent before crawling!</p>
+              <p class="text-xs text-yellow-700 mt-1">
+                <strong>Must include:</strong> Your project name + contact info (email or URL)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-xs text-gray-600 mb-3">
+          <strong>Examples:</strong><br>
+          • <code class="bg-gray-100 px-1 py-0.5 rounded">MyResearchBot/1.0 (mailto:researcher@university.edu)</code><br>
+          • <code class="bg-gray-100 px-1 py-0.5 rounded">CorpusBuilder/2.0 (https://github.com/username/project)</code><br>
+          <br>
+          <strong>Default (placeholder):</strong> <code class="bg-gray-100 px-1 py-0.5 rounded text-red-600">TermCorpusBot/1.0 (Educational Project; mailto:your-email@example.com)</code>
         </p>
+        
         <div class="flex gap-4">
           <input
             v-model="userAgent"
             type="text"
-            placeholder="e.g. MyBot/1.0 (me@example.com)"
+            placeholder="e.g. MyBot/1.0 (mailto:me@example.com)"
             class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
             :disabled="savingSettings"
           />

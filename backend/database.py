@@ -64,7 +64,7 @@ async def init_database():
         # Insert default User-Agent if not exists
         await db.execute("""
             INSERT OR IGNORE INTO system_settings (key, value)
-            VALUES ('user_agent', 'WikipediaTermCorpusGenerator/2.0 (Student Project; contact@example.com)')
+            VALUES ('user_agent', 'TermCorpusBot/1.0 (Educational Project; mailto:your-email@example.com)')
         """)
 
         # Add columns to existing tables if they don't exist

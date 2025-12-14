@@ -49,7 +49,7 @@ app.add_middleware(
 # Initialize Wikipedia API
 # User-Agent is explicitly set to comply with Wikimedia User-Agent Policy
 # https://meta.wikimedia.org/wiki/User-Agent_policy
-USER_AGENT = 'WikipediaTermCorpusGenerator/1.0 (Student Project; contact@silentflare.com; https://github.com/silentflarecom/WikipediaPython)'
+USER_AGENT = 'TermCorpusBot/1.0 (Educational Project; mailto:your-email@example.com)'
 
 wiki_en = wikipediaapi.Wikipedia(
     user_agent=USER_AGENT,
@@ -81,7 +81,7 @@ def search_term(term: str):
     if 'zh' in langlinks:
         # We need to initialize a Chinese wikipedia object to correctly fetch the summary
         wiki_zh = wikipediaapi.Wikipedia(
-             user_agent='TermCorpusGenerator/1.0 (contact@example.com)',
+             user_agent=USER_AGENT,
              language='zh'
         )
         # Get the title from the langlink and fetch the page
