@@ -13,6 +13,12 @@ const maxDepth = ref(1)
 const loading = ref(false)
 const error = ref(null)
 
+// Duplicate detection state
+const checkingDuplicates = ref(false)
+const duplicateResult = ref(null)
+const showDuplicateWarning = ref(false)
+const skipDuplicates = ref(true)
+
 const parsedTerms = computed(() => {
   if (!textInput.value.trim()) return []
   return textInput.value
@@ -23,6 +29,9 @@ const parsedTerms = computed(() => {
 
 const updateTermsFromText = () => {
   terms.value = [...new Set(parsedTerms.value)]
+  // Reset duplicate check when terms change
+  duplicateResult.value = null
+  showDuplicateWarning.value = false
 }
 
 const handleFileUpload = (event) => {
@@ -46,6 +55,9 @@ const handleFileUpload = (event) => {
       .filter(t => t.length > 0 && !t.toLowerCase().startsWith('term')) // Remove header
     
     terms.value = [...new Set(fileTerms)]
+    // Reset duplicate check
+    duplicateResult.value = null
+    showDuplicateWarning.value = false
   }
   
   reader.readAsText(file)
@@ -53,6 +65,8 @@ const handleFileUpload = (event) => {
 
 const removeTerm = (index) => {
   terms.value.splice(index, 1)
+  duplicateResult.value = null
+  showDuplicateWarning.value = false
 }
 
 const clearAll = () => {
@@ -60,20 +74,63 @@ const clearAll = () => {
   textInput.value = ''
   uploadedFile.value = null
   error.value = null
+  duplicateResult.value = null
+  showDuplicateWarning.value = false
 }
 
-const createBatchTask = async () => {
+// Check for duplicates before creating task
+const checkDuplicates = async () => {
   if (terms.value.length === 0) {
     error.value = "Please add at least one term"
     return
   }
   
+  checkingDuplicates.value = true
+  error.value = null
+  
+  try {
+    const response = await axios.post('http://localhost:8000/api/corpus/check-duplicates', {
+      terms: terms.value
+    })
+    
+    duplicateResult.value = response.data
+    
+    if (response.data.existing_count > 0) {
+      showDuplicateWarning.value = true
+    } else {
+      // No duplicates, proceed directly
+      await createBatchTask(terms.value)
+    }
+  } catch (err) {
+    error.value = err.response?.data?.detail || "Failed to check duplicates"
+  } finally {
+    checkingDuplicates.value = false
+  }
+}
+
+// Proceed with task creation (after duplicate check)
+const proceedWithTask = async () => {
+  const termsToUse = skipDuplicates.value 
+    ? duplicateResult.value.new 
+    : terms.value
+  
+  if (termsToUse.length === 0) {
+    error.value = "No new terms to crawl after skipping duplicates"
+    showDuplicateWarning.value = false
+    return
+  }
+  
+  await createBatchTask(termsToUse)
+  showDuplicateWarning.value = false
+}
+
+const createBatchTask = async (termsToSubmit) => {
   loading.value = true
   error.value = null
   
   try {
     const response = await axios.post('http://localhost:8000/api/batch/create', {
-      terms: terms.value,
+      terms: termsToSubmit,
       crawl_interval: crawlInterval.value,
       max_depth: maxDepth.value
     })
@@ -248,13 +305,75 @@ const createBatchTask = async () => {
       <!-- Action Button -->
       <div v-if="terms.length > 0" class="mt-6">
         <button
-          @click="createBatchTask"
-          :disabled="loading"
+          @click="checkDuplicates"
+          :disabled="loading || checkingDuplicates"
           class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow-md hover:shadow-lg"
         >
-          <span v-if="loading">Creating Task...</span>
+          <span v-if="checkingDuplicates">Checking for duplicates...</span>
+          <span v-else-if="loading">Creating Task...</span>
           <span v-else>Start Batch Crawl ({{ terms.length }} terms)</span>
         </button>
+      </div>
+      
+      <!-- Duplicate Warning Modal -->
+      <div v-if="showDuplicateWarning" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+          <h3 class="text-xl font-bold text-amber-600 mb-2 flex items-center gap-2">
+            ⚠️ Duplicate Terms Detected
+          </h3>
+          <p class="text-gray-600 mb-4">
+            {{ duplicateResult.existing_count }} of {{ duplicateResult.total_input }} terms already exist in your corpus:
+          </p>
+          
+          <!-- Existing Terms List -->
+          <div class="max-h-40 overflow-y-auto bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+            <div 
+              v-for="(term, index) in duplicateResult.existing" 
+              :key="index"
+              class="text-sm text-amber-800 py-1 px-2 bg-amber-100 rounded mb-1"
+            >
+              {{ term }}
+            </div>
+          </div>
+          
+          <!-- Options -->
+          <div class="space-y-3 mb-4">
+            <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                   :class="skipDuplicates ? 'border-blue-500 bg-blue-50' : 'border-gray-200'">
+              <input type="radio" v-model="skipDuplicates" :value="true" class="text-blue-600" />
+              <div>
+                <p class="font-medium text-gray-800">Skip duplicates (Recommended)</p>
+                <p class="text-sm text-gray-500">Only crawl {{ duplicateResult.new_count }} new terms</p>
+              </div>
+            </label>
+            
+            <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                   :class="!skipDuplicates ? 'border-blue-500 bg-blue-50' : 'border-gray-200'">
+              <input type="radio" v-model="skipDuplicates" :value="false" class="text-blue-600" />
+              <div>
+                <p class="font-medium text-gray-800">Force re-crawl all</p>
+                <p class="text-sm text-gray-500">Crawl all {{ duplicateResult.total_input }} terms (may create duplicates)</p>
+              </div>
+            </label>
+          </div>
+          
+          <div class="flex gap-3">
+            <button
+              @click="proceedWithTask"
+              :disabled="loading"
+              class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+            >
+              {{ loading ? 'Creating...' : 'Proceed' }}
+            </button>
+            <button
+              @click="showDuplicateWarning = false"
+              :disabled="loading"
+              class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

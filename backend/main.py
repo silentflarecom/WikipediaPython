@@ -18,7 +18,8 @@ from models import (
 from database import (
     init_database, create_batch_task, add_terms_to_task,
     get_task_status, get_task_terms, get_all_tasks,
-    update_task_counters, get_term_associations
+    update_task_counters, get_term_associations,
+    check_existing_terms, delete_task, reset_database, get_corpus_statistics
 )
 from scheduler import start_batch_crawl, cancel_batch_crawl, retry_failed_terms
 from models import Association
@@ -362,6 +363,71 @@ async def get_task_graph(task_id: int):
         "nodes": nodes,
         "edges": edges
     }
+
+
+# ========== New Phase 3 Endpoints: Corpus Quality & Data Management ==========
+
+class DuplicateCheckRequest(BaseModel):
+    terms: List[str]
+
+@app.post("/api/corpus/check-duplicates")
+async def check_duplicates(request: DuplicateCheckRequest):
+    """Check which terms already exist in the corpus"""
+    if not request.terms:
+        return {"existing": [], "new": [], "total_input": 0, "existing_count": 0, "new_count": 0}
+    
+    result = await check_existing_terms(request.terms)
+    return result
+
+
+@app.delete("/api/batch/{task_id}")
+async def delete_batch_task(task_id: int):
+    """Delete a batch task and all its data"""
+    success = await delete_task(task_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return {"message": f"Task {task_id} deleted successfully", "task_id": task_id}
+
+
+@app.post("/api/system/reset")
+async def reset_all_data(confirm: bool = False):
+    """Reset all data in the database. Requires confirm=true"""
+    if not confirm:
+        raise HTTPException(
+            status_code=400, 
+            detail="Must set confirm=true to reset all data. This action cannot be undone!"
+        )
+    
+    result = await reset_database()
+    return {
+        "message": "Database reset successfully",
+        **result
+    }
+
+
+@app.get("/api/corpus/statistics")
+async def get_statistics():
+    """Get overall corpus statistics"""
+    stats = await get_corpus_statistics()
+    return stats
+
+
+@app.get("/api/system/backup")
+async def backup_database():
+    """Download the database file as backup"""
+    from fastapi.responses import FileResponse
+    db_path = "corpus.db"
+    
+    if not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="Database file not found")
+    
+    return FileResponse(
+        path=db_path,
+        filename="corpus_backup.db",
+        media_type="application/octet-stream"
+    )
 
 if __name__ == "__main__":
     import uvicorn

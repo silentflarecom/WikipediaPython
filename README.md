@@ -86,49 +86,43 @@ This tool is designed to strictly adhere to [Wikipedia's User-Agent Policy](http
   - **Multi-format export: PNG, SVG, JSON** ✅
   - Smart full-graph capture (ignores zoom state) ✅
 
-#### **Phase 3: Scheduled & Incremental Updates**
-- **Scheduling Options**:
-  - Daily/Weekly/Monthly automatic updates
-  - Priority-based update queue
-  - Monitor Wikipedia revision history API for changes
-- **Version Control**:
-  - Historical version tracking
-  - Diff comparison between versions
-  - Change notifications (email/webhook)
+#### **Phase 3: Corpus Quality & Data Management** 🎯 IN PROGRESS
+- **Term Deduplication**:
+  - Detect duplicate terms before batch crawling
+  - UI warning for existing terms with skip/force options
+  - Global duplicate check across all tasks
+- **Data Quality Control**:
+  - Automatic quality analysis (missing translations, short summaries)
+  - Quality report dashboard
+  - Data cleaning tools (remove failed/low-quality entries)
+- **Batch Task Management**:
+  - View all historical batch tasks
+  - Delete/archive old tasks
+  - Merge multiple tasks into unified corpus
 
-#### **Phase 4: Multi-Source Data Aggregation**
-- **Extended Data Sources**:
-  - Wikidata (structured knowledge base)
-  - Baidu Baike (Chinese encyclopedia)
-  - Britannica Encyclopedia
-  - Academic paper abstracts (Google Scholar/arXiv)
-  - Real-time financial data for economic terms
-- **Data Fusion**:
-  - Intelligent deduplication and merging
-  - Source attribution and credibility scoring
-  - Cross-source validation
+#### **Phase 4: Advanced Export & Persistence**
+- **Multi-Format Export**:
+  - JSONL (one JSON object per line) - ML training ready
+  - TMX (Translation Memory eXchange) - CAT tool compatible
+  - TSV (Tab-separated values) - Excel/Pandas friendly
+  - TXT (Plain text bilingual pairs) - Simple readable format
+  - Parquet (Optional) - Big data processing
+- **Data Persistence**:
+  - Database backup/restore functionality
+  - Complete data reset with confirmation
+  - Export entire corpus as portable file
 
-#### **Phase 5: AI-Enhanced Corpus Generation**
-- **AI Augmentation**:
-  - Automatic summary optimization
-  - Term definition standardization
-  - Named entity recognition and tagging
-  - Semantic relationship generation between terms
-  - Multi-language translation quality checking
-- **Intelligent Recommendations**:
-  - Suggest missing terms based on existing corpus
-  - Identify coverage gaps in the knowledge base
-
-#### **Phase 6: Distributed Crawling Architecture** (For Large-Scale)
-- **Distributed Components**:
-  - Task queue: RabbitMQ + Celery
-  - Distributed storage: MongoDB/PostgreSQL
-  - Cache layer: Redis
-  - Load balancing across worker nodes
-- **Monitoring Dashboard**:
-  - Real-time crawl status monitoring
-  - Resource usage metrics
-  - Error log aggregation
+#### **Phase 5: Corpus Statistics & Analytics**
+- **Statistics Dashboard**:
+  - Total terms / bilingual pairs count
+  - Character count (EN/ZH separately)
+  - Average summary length
+  - Database size metrics
+  - Knowledge graph node/edge counts
+- **Coverage Analysis**:
+  - Success rate visualization
+  - Missing translation tracking
+  - Domain distribution (if tagged)
 
 ### 🏗️ Technical Architecture (Phase 1 Preview)
 

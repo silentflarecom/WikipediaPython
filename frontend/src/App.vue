@@ -4,8 +4,9 @@ import axios from 'axios'
 import BatchImport from './components/BatchImport.vue'
 import ProgressMonitor from './components/ProgressMonitor.vue'
 import ResultsTable from './components/ResultsTable.vue'
+import TaskManager from './components/TaskManager.vue'
 
-// Active view: 'single' or 'batch'
+// Active view: 'single', 'batch', or 'manage'
 const activeView = ref('single')
 
 // Single search state
@@ -97,6 +98,13 @@ const closeProgress = () => {
 const closeResults = () => {
   showResults.value = false
 }
+
+// Task Manager functions
+const handleViewTask = (taskId) => {
+  currentTaskId.value = taskId
+  activeView.value = 'batch'
+  showResults.value = true
+}
 </script>
 
 <template>
@@ -136,6 +144,17 @@ const closeResults = () => {
           ]"
         >
           📚 Batch Import
+        </button>
+        <button
+          @click="activeView = 'manage'"
+          :class="[
+            'px-8 py-3 rounded-xl font-semibold text-lg transition-all shadow-md',
+            activeView === 'manage'
+              ? 'bg-gradient-to-r from-gray-700 to-gray-800 text-white shadow-gray-300'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          ]"
+        >
+          ⚙️ Manage
         </button>
       </div>
 
@@ -280,6 +299,11 @@ const closeResults = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Manage View -->
+      <div v-if="activeView === 'manage'" class="space-y-6">
+        <TaskManager @view-task="handleViewTask" />
       </div>
     </div>
   </div>

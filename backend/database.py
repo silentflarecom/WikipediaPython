@@ -223,3 +223,132 @@ async def get_term_associations(term_id: int) -> list:
         """, (term_id,))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+async def check_existing_terms(terms: list) -> dict:
+    """Check which terms already exist in the database (across all tasks)
+    Returns dict with 'existing' and 'new' term lists
+    """
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        # Normalize terms for comparison (case-insensitive)
+        terms_lower = [t.lower().strip() for t in terms]
+        placeholders = ",".join(["?" for _ in terms_lower])
+        
+        cursor = await db.execute(f"""
+            SELECT DISTINCT term FROM terms 
+            WHERE LOWER(term) IN ({placeholders})
+            AND status = 'completed'
+        """, terms_lower)
+        
+        rows = await cursor.fetchall()
+        existing_terms = [row['term'] for row in rows]
+        existing_lower = [t.lower() for t in existing_terms]
+        
+        new_terms = [t for t in terms if t.lower().strip() not in existing_lower]
+        
+        return {
+            "existing": existing_terms,
+            "new": new_terms,
+            "total_input": len(terms),
+            "existing_count": len(existing_terms),
+            "new_count": len(new_terms)
+        }
+
+async def delete_task(task_id: int) -> bool:
+    """Delete a task and all its associated data"""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # First check if task exists
+        cursor = await db.execute("SELECT id FROM batch_tasks WHERE id = ?", (task_id,))
+        if not await cursor.fetchone():
+            return False
+        
+        # Get all term IDs for this task
+        cursor = await db.execute("SELECT id FROM terms WHERE task_id = ?", (task_id,))
+        term_ids = [row[0] for row in await cursor.fetchall()]
+        
+        # Delete associations for these terms
+        if term_ids:
+            placeholders = ",".join(["?" for _ in term_ids])
+            await db.execute(f"""
+                DELETE FROM term_associations WHERE source_term_id IN ({placeholders})
+            """, term_ids)
+        
+        # Delete terms
+        await db.execute("DELETE FROM terms WHERE task_id = ?", (task_id,))
+        
+        # Delete task
+        await db.execute("DELETE FROM batch_tasks WHERE id = ?", (task_id,))
+        
+        await db.commit()
+        return True
+
+async def reset_database() -> dict:
+    """Reset database - delete all data but keep structure"""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        # Get counts before deletion
+        cursor = await db.execute("SELECT COUNT(*) FROM batch_tasks")
+        task_count = (await cursor.fetchone())[0]
+        
+        cursor = await db.execute("SELECT COUNT(*) FROM terms")
+        term_count = (await cursor.fetchone())[0]
+        
+        cursor = await db.execute("SELECT COUNT(*) FROM term_associations")
+        assoc_count = (await cursor.fetchone())[0]
+        
+        # Delete all data
+        await db.execute("DELETE FROM term_associations")
+        await db.execute("DELETE FROM terms")
+        await db.execute("DELETE FROM batch_tasks")
+        
+        # Reset auto-increment counters
+        await db.execute("DELETE FROM sqlite_sequence WHERE name IN ('batch_tasks', 'terms', 'term_associations')")
+        
+        await db.commit()
+        
+        return {
+            "deleted_tasks": task_count,
+            "deleted_terms": term_count,
+            "deleted_associations": assoc_count
+        }
+
+async def get_corpus_statistics() -> dict:
+    """Get overall corpus statistics"""
+    async with aiosqlite.connect(DATABASE_FILE) as db:
+        stats = {}
+        
+        # Total tasks
+        cursor = await db.execute("SELECT COUNT(*) FROM batch_tasks")
+        stats['total_tasks'] = (await cursor.fetchone())[0]
+        
+        # Total terms and completed terms
+        cursor = await db.execute("SELECT COUNT(*) FROM terms")
+        stats['total_terms'] = (await cursor.fetchone())[0]
+        
+        cursor = await db.execute("SELECT COUNT(*) FROM terms WHERE status = 'completed'")
+        stats['completed_terms'] = (await cursor.fetchone())[0]
+        
+        cursor = await db.execute("SELECT COUNT(*) FROM terms WHERE status = 'failed'")
+        stats['failed_terms'] = (await cursor.fetchone())[0]
+        
+        # Bilingual pairs (have both en and zh)
+        cursor = await db.execute("""
+            SELECT COUNT(*) FROM terms 
+            WHERE status = 'completed' AND en_summary IS NOT NULL AND zh_summary IS NOT NULL
+            AND en_summary != '' AND zh_summary != ''
+        """)
+        stats['bilingual_pairs'] = (await cursor.fetchone())[0]
+        
+        # Total associations
+        cursor = await db.execute("SELECT COUNT(*) FROM term_associations")
+        stats['total_associations'] = (await cursor.fetchone())[0]
+        
+        # Database file size
+        if os.path.exists(DATABASE_FILE):
+            stats['db_size_bytes'] = os.path.getsize(DATABASE_FILE)
+            stats['db_size_mb'] = round(stats['db_size_bytes'] / (1024 * 1024), 2)
+        else:
+            stats['db_size_bytes'] = 0
+            stats['db_size_mb'] = 0
+        
+        return stats
+
